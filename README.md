@@ -28,6 +28,15 @@ Install **Expo Go** from the App Store or Google Play on both phones. Scan the Q
 
 Then on one phone, create an account and tap **Invite my partner**. On the other phone, create an account, tap **I have a code** and enter the code.
 
+## Install it on Android phones
+
+GitHub builds an installable app every time the code on `main` changes (see [`.github/workflows/android.yml`](.github/workflows/android.yml)).
+
+1. Do steps 1 and 2 above (set up Supabase).
+2. On GitHub, open **Settings > Secrets and variables > Actions > Variables** and add two repository variables: `SUPABASE_URL` and `SUPABASE_ANON_KEY`, with the same values as in `.env`.
+3. Open **Actions > Android app > Run workflow**. The build takes about 20 to 30 minutes.
+4. On each phone, open [the download link](https://github.com/Manni04-1/love-birds/releases/download/android-latest/love-birds.apk), open the file, and allow your browser to install apps when Android asks. To update later, install the new file the same way. Your data stays.
+
 ## What's in this version
 
 | Feature | What works |

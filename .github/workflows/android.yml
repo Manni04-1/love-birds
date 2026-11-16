@@ -1,0 +1,84 @@
+name: Android app
+
+# Builds an installable Android app (APK) on GitHub's servers.
+# - Every pull request: builds the app to check it still compiles.
+# - Every push to main: builds it and publishes it as the "Love Birds for Android"
+#   release, so phones can download it from one fixed link.
+#
+# The app needs your Supabase project's URL and anon key. Add them under
+# Settings > Secrets and variables > Actions > Variables as SUPABASE_URL and
+# SUPABASE_ANON_KEY. Without them the app builds but can't sign anyone in.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      EXPO_NO_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Check the code
+        run: |
+          npm run typecheck
+          npm run lint
+
+      - name: Generate the Android project
+        run: |
+          npx expo prebuild --platform android --no-install
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g/' android/gradle.properties
+
+      - name: Build the app
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
+
+      - name: Name the file
+        run: cp android/app/build/outputs/apk/release/app-release.apk love-birds.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: love-birds-android
+          path: love-birds.apk
+          retention-days: 14
+
+      - name: Publish the download link
+        if: github.ref == 'refs/heads/main' && vars.SUPABASE_URL != '' && vars.SUPABASE_ANON_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest love-birds.apk \
+            --title "Love Birds for Android" \
+            --target "${GITHUB_SHA}" \
+            --latest \
+            --notes "Built from ${GITHUB_SHA::7} on $(date -u '+%d %b %Y'). Open this page on your Android phone, tap love-birds.apk, and allow your browser to install apps when asked."
