@@ -7,6 +7,14 @@
     "icon": "./assets/images/icon.png",
     "scheme": "lovebirds",
     "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    },
     "ios": {
       "icon": "./assets/expo.icon"
     },

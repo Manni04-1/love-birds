@@ -6,12 +6,14 @@ import { useColorScheme } from 'react-native';
 
 import { SessionProvider, useSession } from '@/lib/session';
 import { useColors } from '@/lib/theme';
+import { useAppUpdates } from '@/lib/updates';
 
 SplashScreen.preventAutoHideAsync();
 
 function Routes() {
   const { ready, session, partner } = useSession();
   const c = useColors();
+  useAppUpdates();
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();

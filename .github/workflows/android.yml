@@ -3,7 +3,13 @@ name: Android app
 # Builds an installable Android app (APK) on GitHub's servers.
 # - Every pull request: builds the app to check it still compiles.
 # - Every push to main: builds it and publishes it as the "Love Birds for Android"
-#   release, so phones can download it from one fixed link.
+#   release, so phones can download it from one fixed link. It also sends the
+#   new code to phones that already have the app (an over-the-air update), so
+#   most changes arrive without reinstalling.
+#
+# Over-the-air updates use Expo (EAS Update) and need the repository secret
+# EXPO_TOKEN, an access token from expo.dev > Account settings > Access tokens.
+# Without it, the app still builds, just without automatic updates.
 #
 # The app connects to the Supabase project below. The publishable key is meant
 # to ship inside the app (Supabase's privacy rules protect the data), so it is
@@ -32,6 +38,7 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://brijfdeciwhlankmoeet.supabase.co' }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || 'sb_publishable_NTHyyalfG8dmPtYJ93Uz9Q_zjl7CRLt' }}
       EXPO_NO_TELEMETRY: 1
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,6 +61,22 @@ jobs:
         run: |
           npm run typecheck
           npm run lint
+
+      # Links the app to its Expo project (creating it the first time) and points
+      # the app at that project's update server.
+      - name: Connect to Expo for automatic updates
+        if: env.EXPO_TOKEN != ''
+        run: |
+          npx --yes eas-cli@27 init --non-interactive --force
+          node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            const id = app.expo.extra?.eas?.projectId;
+            if (!id) throw new Error("No Expo project ID in app.json");
+            app.expo.updates = { ...app.expo.updates, url: `https://u.expo.dev/${id}` };
+            fs.writeFileSync("app.json", JSON.stringify(app, null, 2) + "\n");
+            console.log(`Expo project ID: ${id}`);
+          '
 
       - name: Generate the Android project
         run: |
@@ -84,3 +107,13 @@ jobs:
             --target "${GITHUB_SHA}" \
             --latest \
             --notes "Built from ${GITHUB_SHA::7} on $(date -u '+%d %b %Y'). Open this page on your Android phone, tap love-birds.apk, and allow your browser to install apps when asked."
+
+      # Phones running a build with the same app version pick this up the next
+      # time the app opens. Bump "version" in app.json whenever a native package
+      # is added or upgraded, so old installs don't get code they can't run.
+      - name: Send the update to installed apps
+        if: github.ref == 'refs/heads/main' && env.EXPO_TOKEN != ''
+        run: |
+          npx --yes eas-cli@27 update --channel production --platform android \
+            --environment production --non-interactive \
+            --message "$(git log -1 --format=%s)"
