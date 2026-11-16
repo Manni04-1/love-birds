@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useUpdates } from 'expo-updates';
 import { useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +9,7 @@ import { today } from '@/lib/dates';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { radius, space, useColors } from '@/lib/theme';
+import { downloadUpdate, restartIntoUpdate, updatesEnabled, versionLabel } from '@/lib/updates';
 
 function Group({ label, children }: { label: string; children: ReactNode }) {
   const c = useColors();
@@ -28,6 +30,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
+  const { isUpdatePending } = useUpdates();
+  const [checking, setChecking] = useState(false);
+  const [updateNote, setUpdateNote] = useState('');
 
   if (!ctx) return null;
   const { profile, partner, couple, refresh, signOut } = ctx;
@@ -50,6 +55,18 @@ export default function Settings() {
     if (err) return setError(friendlyError(err));
     setSaved('Date saved');
     await refresh();
+  }
+
+  async function checkForUpdate() {
+    setUpdateNote('');
+    setChecking(true);
+    try {
+      const ready = await downloadUpdate();
+      if (!ready) setUpdateNote('You have the latest version.');
+    } catch {
+      setUpdateNote('Couldn\'t check right now. Try again in a minute.');
+    }
+    setChecking(false);
   }
 
   function confirmUnlink() {
@@ -115,6 +132,19 @@ export default function Settings() {
           <T variant="small">
             Only you and {partner.name} can see your calendar, chat, memories and answers. Photos are stored privately and open only inside the app.
           </T>
+        </Group>
+
+        <Group label="App">
+          <Row style={{ justifyContent: 'space-between' }}>
+            <T muted>Version</T>
+            <T variant="strong">{versionLabel()}</T>
+          </Row>
+          {isUpdatePending ? (
+            <Button title="Restart to update" onPress={restartIntoUpdate} />
+          ) : updatesEnabled ? (
+            <Button title="Check for updates" variant="outline" onPress={checkForUpdate} loading={checking} />
+          ) : null}
+          {updateNote ? <T variant="small" muted>{updateNote}</T> : null}
         </Group>
 
         <Group label="Account">
