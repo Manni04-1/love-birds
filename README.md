@@ -1,56 +1,65 @@
-# Welcome to your Expo app 👋
+# Love Birds
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A private app for two: a shared calendar, a chat, a timeline of memories and photos, and a daily question you both answer. One app for iPhone and Android, built with [Expo](https://expo.dev) and [Supabase](https://supabase.com).
 
-## Get started
+## Try it on your phones (about 20 minutes, free)
 
-1. Install dependencies
+### 1. Set up the database
 
-   ```bash
-   npm install
-   ```
+1. Create a free account at [supabase.com](https://supabase.com) and make a new project. Pick the region closest to you.
+2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success".
+3. While you're testing, turn off email confirmation so you can sign in straight away: **Authentication > Sign In / Providers > Email**, switch off **Confirm email**, and save. Turn it back on before you invite other couples.
 
-2. Start the app
+### 2. Connect the app to the database
 
-   ```bash
-   npx expo start
-   ```
+1. In Supabase, open **Project Settings > API** (or click **Connect**) and copy the **Project URL** and the **anon / publishable key**.
+2. In this folder, copy `.env.example` to a new file called `.env` and paste the two values in.
 
-In the output, you'll find options to open the app in a
+### 3. Run it
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+You need [Node.js](https://nodejs.org) 20 or newer on your computer.
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Install **Expo Go** from the App Store or Google Play on both phones. Scan the QR code from the terminal (iPhone: with the Camera app; Android: inside Expo Go). Your phone and computer need to be on the same Wi-Fi. If they can't be, run `npx expo start --tunnel` instead.
 
-### Other setup steps
+Then on one phone, create an account and tap **Invite my partner**. On the other phone, create an account, tap **I have a code** and enter the code.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## What's in this version
 
-## Learn more
+| Feature | What works |
+| --- | --- |
+| Accounts | Sign up and sign in with email and password |
+| Partner linking | 6-character invite code, valid for 24 hours, works once |
+| Home | Days together, today's question, next plan, latest memory |
+| Daily question | One question a day for both of you. Your partner's answer stays hidden until you've answered too |
+| Calendar | Month view, add plans with date, time and a note, long press to delete. Updates live when your partner adds something |
+| Chat | Text and photos, tap a message to heart it, "Seen" receipts, live updates |
+| Memories | Photo, caption, date and place, "Love" a memory, long press your own to delete |
+| Settings | Change your name and your together-since date, sign out, unlink, delete account |
 
-To learn more about developing your project with Expo, look at the following resources:
+Privacy: every table has row-level security, so only the two people in a couple can read its data. Photos sit in a private storage bucket, one folder per couple, and open through short-lived links.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Not built yet
 
-## Join the community
+- Push notifications and plan reminders (needs `expo-notifications` and a development build)
+- App lock with Face ID or a PIN (`expo-local-authentication`)
+- Sign in with Apple and Google
+- Working offline
+- Store builds for the App Store and Google Play (with [EAS Build](https://docs.expo.dev/build/introduction/))
+- Date ideas, games and the other extras planned for later
 
-Join our community of developers creating universal apps.
+## For developers
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npm run typecheck   # TypeScript
+npm run lint        # ESLint
+```
+
+- Screens live in `src/app` (Expo Router). `(tabs)` holds Home, Calendar, Chat and Memories.
+- `src/lib/session.tsx` loads the signed-in person, their couple and their partner. The root layout uses `Stack.Protected` to show sign-in, partner linking or the app.
+- `src/lib/supabase.ts` creates the client from `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+- Database changes go in `supabase/schema.sql`.
