@@ -5,9 +5,11 @@ name: Android app
 # - Every push to main: builds it and publishes it as the "Love Birds for Android"
 #   release, so phones can download it from one fixed link.
 #
-# The app needs your Supabase project's URL and anon key. Add them under
-# Settings > Secrets and variables > Actions > Variables as SUPABASE_URL and
-# SUPABASE_ANON_KEY. Without them the app builds but can't sign anyone in.
+# The app connects to the Supabase project below. The publishable key is meant
+# to ship inside the app (Supabase's privacy rules protect the data), so it is
+# fine to keep here. To point the app at another project, set the repository
+# variables SUPABASE_URL and SUPABASE_ANON_KEY under
+# Settings > Secrets and variables > Actions > Variables.
 
 on:
   push:
@@ -27,8 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://brijfdeciwhlankmoeet.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || 'sb_publishable_NTHyyalfG8dmPtYJ93Uz9Q_zjl7CRLt' }}
       EXPO_NO_TELEMETRY: 1
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +74,7 @@ jobs:
           retention-days: 14
 
       - name: Publish the download link
-        if: github.ref == 'refs/heads/main' && vars.SUPABASE_URL != '' && vars.SUPABASE_ANON_KEY != ''
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
