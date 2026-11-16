@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { forgetThisPhone } from './notifications';
 import { supabase } from './supabase';
 import type { Couple, Profile } from './types';
 
@@ -35,7 +36,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setPartner(null);
       return;
     }
-    const { data: me } = await supabase.from('profiles').select('id, name, couple_id').eq('id', uid).maybeSingle();
+    const { data: me } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
     setProfile(me ?? null);
     if (!me?.couple_id) {
       setCouple(null);
@@ -44,7 +45,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     const [{ data: c }, { data: p }] = await Promise.all([
       supabase.from('couples').select('id, invite_code, invite_expires_at, together_since').eq('id', me.couple_id).maybeSingle(),
-      supabase.from('profiles').select('id, name, couple_id').eq('couple_id', me.couple_id).neq('id', uid).maybeSingle(),
+      supabase.from('profiles').select('*').eq('couple_id', me.couple_id).neq('id', uid).maybeSingle(),
     ]);
     setCouple(c ?? null);
     setPartner(p ?? null);
@@ -73,8 +74,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => load(userId), [load, userId]);
   const signOut = useCallback(async () => {
+    if (userId) await forgetThisPhone(userId).catch(() => {});
     await supabase.auth.signOut();
-  }, []);
+  }, [userId]);
 
   const value = useMemo(
     () => ({ ready, session, userId, profile, couple, partner, refresh, signOut }),
