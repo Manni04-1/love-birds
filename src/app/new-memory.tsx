@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,9 +14,11 @@ import { radius, space, useColors } from '@/lib/theme';
 export default function NewMemory() {
   const c = useColors();
   const ctx = useCouple();
+  // caption, day and match come from a date you did: match marks it done.
+  const params = useLocalSearchParams<{ caption?: string; day?: string; match?: string }>();
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
-  const [caption, setCaption] = useState('');
-  const [day, setDay] = useState<string | null>(toISODate(today()));
+  const [caption, setCaption] = useState(params.caption ?? '');
+  const [day, setDay] = useState<string | null>(params.day ?? toISODate(today()));
   const [place, setPlace] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -30,14 +32,23 @@ export default function NewMemory() {
     setBusy(true);
     try {
       const photo_path = photo ? await uploadPhoto(couple.id, photo) : null;
-      const { error: err } = await supabase.from('memories').insert({
-        couple_id: couple.id,
-        caption: caption.trim(),
-        happened_on: day ?? toISODate(today()),
-        place: place.trim() || null,
-        photo_path,
-      });
+      const happened_on = day ?? toISODate(today());
+      const { data, error: err } = await supabase
+        .from('memories')
+        .insert({
+          couple_id: couple.id,
+          caption: caption.trim(),
+          happened_on,
+          place: place.trim() || null,
+          photo_path,
+        })
+        .select('id')
+        .single();
       if (err) throw err;
+      if (params.match && data) {
+        // Best effort: the memory is saved either way.
+        await supabase.from('date_matches').update({ done_on: happened_on, memory_id: data.id }).eq('couple_id', couple.id).eq('idea_id', params.match);
+      }
       router.back();
     } catch (e) {
       setError(friendlyError(e));
@@ -50,7 +61,7 @@ export default function NewMemory() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
-          <T variant="title">New memory</T>
+          <T variant="title">{params.match ? 'How was your date?' : 'New memory'}</T>
           <Pressable
             onPress={async () => {
               const p = await pickPhoto();

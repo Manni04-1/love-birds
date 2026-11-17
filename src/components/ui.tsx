@@ -174,6 +174,9 @@ const GLYPHS = {
   check: { ios: 'checkmark', android: 'check' },
   prev: { ios: 'chevron.left', android: 'chevron_left' },
   next: { ios: 'chevron.right', android: 'chevron_right' },
+  close: { ios: 'xmark', android: 'close' },
+  shuffle: { ios: 'shuffle', android: 'shuffle' },
+  sparkles: { ios: 'sparkles', android: 'auto_awesome' },
 } as const satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type GlyphName = keyof typeof GLYPHS;
@@ -182,6 +185,29 @@ export type GlyphName = keyof typeof GLYPHS;
 export function Glyph({ name, color, size = 20 }: { name: GlyphName; color: string; size?: number }) {
   const g = GLYPHS[name];
   return <SymbolView name={{ ios: g.ios, android: g.android, web: g.android }} tintColor={color} size={size} />;
+}
+
+/** A small pill to pick a filter or an option. */
+export function Chip({ label, selected, onPress, disabled }: { label: string; selected: boolean; onPress: () => void; disabled?: boolean }) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled: !!disabled }}
+      style={({ pressed }) => ({
+        paddingHorizontal: 14,
+        minHeight: 36,
+        justifyContent: 'center',
+        borderRadius: radius.pill,
+        borderWidth: 1.5,
+        borderColor: selected ? c.accent : c.line,
+        backgroundColor: selected ? c.accent : c.surface,
+        opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
+      })}>
+      <Text style={[textStyles.small, { fontWeight: '700', color: selected ? c.onAccent : c.ink }]}>{label}</Text>
+    </Pressable>
+  );
 }
 
 /* Inputs ----------------------------------------------------------------- */

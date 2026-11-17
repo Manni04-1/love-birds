@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { Button, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { today } from '@/lib/dates';
+import { sharedHeat } from '@/lib/games';
 import { enableNotifications, type NotificationStatus } from '@/lib/notifications';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
@@ -54,6 +55,14 @@ function BubbleChoice({ look, label, sample, selected, onPress }: { look: Bubble
   );
 }
 
+const HEATS: { heat: number; label: string; note: string }[] = [
+  { heat: 0, label: 'Off', note: 'Light and deep questions only' },
+  { heat: 1, label: 'Flirty', note: 'Playful and a little cheeky' },
+  { heat: 2, label: 'Flirty and erotic', note: 'Desire and intimacy, for adults only' },
+];
+
+const SHARED_TEXT = ['Nothing extra is on for you both yet.', 'On for you both: Flirty.', 'On for you both: Flirty and Erotic.'];
+
 const STATUS_TEXT: Record<NotificationStatus, string> = {
   on: 'On. You\'ll hear the love chime for messages, plans, memories and answers, and get a reminder an hour before each plan.',
   'reminders-only': 'Plan reminders work, but messages from your partner can\'t reach this phone yet.',
@@ -74,6 +83,12 @@ export default function Settings() {
   const [notif, setNotif] = useState<NotificationStatus | null>(null);
   const [notifNote, setNotifNote] = useState('');
   const userId = ctx?.userId;
+  const refreshCouple = ctx?.refresh;
+
+  // Shows your partner's latest settings, such as which question decks are on for you both.
+  useEffect(() => {
+    refreshCouple?.();
+  }, [refreshCouple]);
 
   useEffect(() => {
     if (!userId) return;
@@ -110,6 +125,21 @@ export default function Settings() {
     const { error: err } = await supabase.from('profiles').update({ bubble: look }).eq('id', profile.id);
     if (err) return setError(friendlyError(err));
     await refresh();
+  }
+
+  async function saveHeat(heat: number) {
+    setError('');
+    const { error: err } = await supabase.from('profiles').update({ heat }).eq('id', profile.id);
+    if (err) return setError(friendlyError(err));
+    await refresh();
+  }
+
+  function chooseHeat(heat: number) {
+    if (heat < 2 || (profile.heat ?? 0) >= 2) return saveHeat(heat);
+    Alert.alert('For adults only', 'Erotic questions are about desire and intimacy. Are you 18 or older?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Yes, switch on', onPress: () => saveHeat(heat) },
+    ]);
   }
 
   async function turnOnNotifications() {
@@ -205,6 +235,37 @@ export default function Settings() {
               <BubbleChoice key={l.look} {...l} selected={profile.bubble === l.look} onPress={() => chooseBubble(l.look)} />
             ))}
           </Row>
+        </Group>
+
+        <Group label="After dark">
+          <T variant="small" muted>
+            Flirty and erotic questions for your games. A deck appears only when you&apos;ve both switched it on, and the app only shows what&apos;s on for
+            you both.
+          </T>
+          {HEATS.map((h) => {
+            const selected = (profile.heat ?? 0) === h.heat;
+            return (
+              <Pressable
+                key={h.heat}
+                onPress={() => chooseHeat(h.heat)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 4 }}>
+                <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selected ? c.accent : c.line, alignItems: 'center', justifyContent: 'center' }}>
+                  {selected && <View style={{ width: 11, height: 11, borderRadius: 6, backgroundColor: c.accent }} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <T variant="strong">{h.label}</T>
+                  <T variant="small" muted>
+                    {h.note}
+                  </T>
+                </View>
+              </Pressable>
+            );
+          })}
+          <T variant="small" accent style={{ fontWeight: '700' }}>
+            {SHARED_TEXT[sharedHeat(profile, partner)]}
+          </T>
         </Group>
 
         <Group label="Notifications">

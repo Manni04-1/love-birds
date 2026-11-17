@@ -28,6 +28,10 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Chat</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'bubble.left', selected: 'bubble.left.fill' }} md="chat_bubble" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="together">
+        <NativeTabs.Trigger.Label>Together</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'sparkles', selected: 'sparkles' }} md="auto_awesome" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="memories">
         <NativeTabs.Trigger.Label>Memories</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'photo.on.rectangle', selected: 'photo.fill.on.rectangle.fill' }} md="photo_library" />
