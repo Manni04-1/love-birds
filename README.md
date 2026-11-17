@@ -7,7 +7,7 @@ A private app for two: a shared calendar, a chat, a timeline of memories and pho
 ### 1. Set up the database
 
 1. Create a free account at [supabase.com](https://supabase.com) and make a new project. Pick the region closest to you.
-2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success". Then do the same with [`supabase/notifications.sql`](supabase/notifications.sql).
+2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success". Then do the same with [`supabase/notifications.sql`](supabase/notifications.sql), and then [`supabase/together.sql`](supabase/together.sql).
 3. While you're testing, turn off email confirmation so you can sign in straight away: **Authentication > Sign In / Providers > Email**, switch off **Confirm email**, and save. Turn it back on before you invite other couples.
 
 ### 2. Connect the app to the database
@@ -72,7 +72,10 @@ The next build on `main` links the app to an Expo project, and from then on ever
 | Chat | Text and photos, tap a message to heart it, "Seen" receipts, live updates. Each of you picks a bubble: fuchsia with hearts, or thorny vines and roses |
 | Notifications | A soft love chime for messages, hearts, new plans and memories, and daily answers. Reminders an hour before plans |
 | Memories | Photo, caption, date and place, "Love" a memory, long press your own to delete |
-| Settings | Change your name, your bubble and your together-since date, test notifications, check for updates, sign out, unlink, delete account |
+| Date ideas | A deck of about 90 ideas (at home, going out, adventure, romantic and around Nairobi) to swipe right or left. When you both like one it's a match, with a notification. Plan a match straight into the calendar, then save it as a memory after the date. Add your own ideas, filter by type or free, and tap Surprise me |
+| Games | Would you rather and How well do you know me (with a score both ways): your partner's answers stay hidden until you've answered too. Talk decks to pull cards from: Light, Deep, Flirty and Erotic |
+| After dark | Flirty and Erotic questions appear only once you have both switched them on in Settings. The app only shows what's on for you both |
+| Settings | Change your name, your bubble, your together-since date and After dark, test notifications, check for updates, sign out, unlink, delete account |
 
 Privacy: every table has row-level security, so only the two people in a couple can read its data. Photos sit in a private storage bucket, one folder per couple, and open through short-lived links.
 
@@ -82,7 +85,6 @@ Privacy: every table has row-level security, so only the two people in a couple 
 - Sign in with Apple and Google
 - Working offline
 - Store builds for the App Store and Google Play (with [EAS Build](https://docs.expo.dev/build/introduction/))
-- Date ideas, games and the other extras planned for later
 
 ## For developers
 
@@ -96,4 +98,5 @@ npm run lint        # ESLint
 - `src/lib/supabase.ts` creates the client from `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 - Database changes go in `supabase/schema.sql`.
 - `src/lib/notifications.ts` registers for push, schedules plan reminders and opens the right screen when a notification is tapped. `supabase/notifications.sql` holds the triggers that send them. `src/components/love-bubble.tsx` draws the two chat bubbles.
+- `supabase/together.sql` holds date ideas (with the built-in ideas), swipes, matches and game answers. Game questions live in `src/content/games.ts`: keep each question's key when you reword it, and give new questions new keys.
 - `src/lib/updates.ts` handles over-the-air updates. The runtime version follows `version` in `app.json`, so raise it whenever a native package changes.

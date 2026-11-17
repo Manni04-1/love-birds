@@ -44,6 +44,11 @@ function Routes() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="new-plan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="new-memory" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="new-idea" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="matches" />
+        <Stack.Screen name="wyr" />
+        <Stack.Screen name="quiz" />
+        <Stack.Screen name="talk" />
       </Stack.Protected>
     </Stack>
   );

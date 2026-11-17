@@ -35,5 +35,8 @@ export function friendlyError(error: unknown): string {
   if (/invalid login credentials/i.test(message)) return 'That email and password don\'t match. Try again.';
   if (/email not confirmed/i.test(message)) return 'Confirm your email first. We sent you a link.';
   if (/already registered/i.test(message)) return 'There\'s already an account with this email. Sign in instead.';
+  if (/could not find the (table|function)|schema cache|does not exist/i.test(message)) {
+    return 'This part of the app isn\'t set up yet. Run the newest SQL file from the supabase folder in your Supabase SQL Editor.';
+  }
   return message;
 }

@@ -83,7 +83,7 @@ export function useNotificationSetup(userId: string | undefined) {
 }
 
 /** Opens the right screen when a notification is tapped. */
-export function useNotificationTaps() {
+function useNotificationTapsNative() {
   const last = Notifications.useLastNotificationResponse();
   useEffect(() => {
     if (!last || last.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
@@ -92,6 +92,9 @@ export function useNotificationTaps() {
     if (typeof url === 'string' && url.startsWith('/')) router.push(url);
   }, [last]);
 }
+
+/** Opens the right screen when a notification is tapped (phones only: the web preview has no notifications). */
+export const useNotificationTaps = Platform.OS === 'web' ? () => {} : useNotificationTapsNative;
 
 // ---------------------------------------------------------------------------
 // Plan reminders (scheduled on the phone, so they work even offline)
