@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "891113524631",
+    "project_id": "love-birds-bb7b7",
+    "storage_bucket": "love-birds-bb7b7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:891113524631:android:ed097334896e4f50a808d2",
+        "android_client_info": {
+          "package_name": "io.github.manni041.lovebirds"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxLxtNQNqR8j6MohPtBDprMSfEtltsTbQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -29,6 +29,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "io.github.manni041.lovebirds",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1
     },
     "web": {
