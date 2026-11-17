@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Button, Card, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
@@ -17,6 +17,8 @@ export default function QuestionScreen() {
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -45,6 +47,26 @@ export default function QuestionScreen() {
     if (err) return setError(friendlyError(err));
     setAnswer('');
     await reload();
+  }
+
+  async function saveEdit() {
+    if (!q?.mine) return;
+    setError('');
+    if (!draft.trim()) return setError('Write something first. Even one line is perfect.');
+    if (draft.trim() === q.mine.body?.trim()) return setEditing(false);
+    setBusy(true);
+    const { error: err } = await supabase.rpc('edit_answer', { p_day: q.day, p_body: draft.trim() });
+    setBusy(false);
+    if (err) return setError(friendlyError(err));
+    setEditing(false);
+    await reload();
+  }
+
+  function confirmEdit() {
+    Alert.alert('Change your answer?', 'You can change it once. After that it stays as it is.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Save change', onPress: saveEdit },
+    ]);
   }
 
   const todayLabel = today().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -96,11 +118,37 @@ export default function QuestionScreen() {
                   <Avatar name={profile.name} size={38} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <T variant="small" muted style={{ fontWeight: '700' }}>
-                      You
+                      You{q.mine.edited_at ? ' · edited' : ''}
                     </T>
-                    <T>{q.mine.body}</T>
+                    {editing ? (
+                      <View style={{ gap: space.sm, marginTop: 4 }}>
+                        <Field label="Your new answer" value={draft} onChangeText={setDraft} multiline maxLength={2000} autoFocus />
+                        <ErrorText>{error}</ErrorText>
+                        <Row gap={space.sm}>
+                          <Button style={{ flex: 1 }} title="Cancel" variant="outline" onPress={() => setEditing(false)} />
+                          <Button style={{ flex: 1 }} title="Save" onPress={confirmEdit} loading={busy} />
+                        </Row>
+                      </View>
+                    ) : (
+                      <T>{q.mine.body}</T>
+                    )}
                   </View>
                 </Row>
+                {!q.mine.edited_at && !editing && (
+                  <Pressable
+                    onPress={() => {
+                      setDraft(q.mine?.body ?? '');
+                      setError('');
+                      setEditing(true);
+                    }}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    style={{ alignSelf: 'flex-end', marginTop: 4 }}>
+                    <T variant="small" accent style={{ fontWeight: '700' }}>
+                      ✏️ Change my answer (once)
+                    </T>
+                  </Pressable>
+                )}
               </Card>
               <Card>
                 <Row gap={space.md} style={{ alignItems: 'flex-start' }}>
@@ -108,6 +156,7 @@ export default function QuestionScreen() {
                   <View style={{ flex: 1, gap: 2 }}>
                     <T variant="small" muted style={{ fontWeight: '700' }}>
                       {partner.name}
+                      {q.partner?.body && q.partner.edited_at ? ' · edited' : ''}
                     </T>
                     <T muted={!q.partner?.body}>{q.partner?.body ?? `Waiting for ${partner.name} to answer. You'll both see each other's answers then.`}</T>
                   </View>

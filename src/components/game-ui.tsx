@@ -6,11 +6,17 @@ import { Chip, Glyph, IconButton, Row, T } from '@/components/ui';
 import { levelInfo, type Level } from '@/content/games';
 import { radius, space, useColors } from '@/lib/theme';
 
-export function BackHeader({ title }: { title: string }) {
+/** A back button and title. With nowhere to go back to (opened from a notification), it goes to `home`, or to the games. */
+export function BackHeader({ title, home }: { title: string; home?: '/' }) {
   const c = useColors();
+  const leave = () => {
+    if (router.canGoBack()) router.back();
+    else if (home) router.replace(home);
+    else router.replace({ pathname: '/together', params: { tab: 'games' } });
+  };
   return (
     <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm }}>
-      <IconButton label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace({ pathname: '/together', params: { tab: 'games' } }))}>
+      <IconButton label="Back" onPress={leave}>
         <Glyph name="back" color={c.ink} />
       </IconButton>
       <T variant="strong" style={{ fontSize: 18, flex: 1 }} numberOfLines={1}>

@@ -1,27 +1,77 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { GestureCard, MoodPicker, MoodRow, NudgeButton, NudgeToast, TilePhoto, TodayTile } from '@/components/daily';
+import { HeartShape, Hero, heroInk, usePulse, useReducedMotion } from '@/components/hero';
 import { Photo } from '@/components/photo';
-import { Avatar, Button, Card, DateField, Glyph, IconButton, Row, T } from '@/components/ui';
-import { dayLabel, daysBetween, greeting, longDate, parseISODate, shortDate, timeLabel, toISODate, today } from '@/lib/dates';
+import { Avatar, Button, Card, DateField, Glyph, Row, T } from '@/components/ui';
+import { gestureFor } from '@/content/gestures';
+import { saveMood, useCheckins, useDailyPhotos, useGestureDone, useMoods, useNudges } from '@/lib/daily';
+import { dayLabel, dayNumber, daysBetween, greeting, longDate, parseISODate, shortDate, timeLabel, toISODate, today } from '@/lib/dates';
 import { useQuestions } from '@/lib/questions';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
-import { radius, space, tabBarInset, useColors } from '@/lib/theme';
+import { radius, space, tabBarInset, useColors, useThemeName } from '@/lib/theme';
 import type { Memory, Plan } from '@/lib/types';
+
+/** A heart that beats between your two initials. */
+function Heartbeat({ color }: { color: string }) {
+  const reduced = useReducedMotion();
+  const beat = usePulse(1100, 0, reduced);
+  const scale = beat.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
+  return (
+    <Animated.View style={{ transform: [{ scale }], marginHorizontal: -6, zIndex: 1 }}>
+      <HeartShape size={34} color={color} />
+    </Animated.View>
+  );
+}
+
+/** "642 days together", plus a note on anniversaries and every hundredth day. */
+function milestone(since: string, days: number): string {
+  const start = parseISODate(since);
+  const t = today();
+  const years = t.getFullYear() - start.getFullYear();
+  if (years > 0 && t.getMonth() === start.getMonth() && t.getDate() === start.getDate()) {
+    return `🎉 Happy anniversary! ${years} ${years === 1 ? 'year' : 'years'} today`;
+  }
+  if (days > 0 && days % 100 === 0) return `🎉 ${days.toLocaleString('en-GB')} days today!`;
+  const next = Math.ceil((days + 1) / 100) * 100;
+  return `${next - days} ${next - days === 1 ? 'day' : 'days'} until day ${next.toLocaleString('en-GB')}`;
+}
+
+function countdown(day: string): string {
+  const n = daysBetween(today(), parseISODate(day));
+  if (n <= 0) return 'Today';
+  if (n === 1) return 'Tomorrow';
+  return `In ${n} days`;
+}
 
 export default function Home() {
   const c = useColors();
+  const theme = useThemeName();
+  const dark = useColorScheme() === 'dark';
+  const ink = heroInk(theme, dark);
   const ctx = useCouple();
   const coupleId = ctx?.couple.id;
-  const { today: q, reload: reloadQuestions } = useQuestions(ctx?.userId, 0);
+  const userId = ctx?.userId;
+  const { today: q, reload: reloadQuestions } = useQuestions(userId, 0);
+  const checkins = useCheckins(userId);
+  const photos = useDailyPhotos(userId);
+  const { moods, reload: reloadMoods } = useMoods(coupleId);
+  const [ping, setPing] = useState(0);
+  const nudges = useNudges(coupleId, userId, () => setPing((p) => p + 1));
+  const gesture = useGestureDone();
+  const [moodOpen, setMoodOpen] = useState(false);
   const [next, setNext] = useState<Plan | null>(null);
   const [latest, setLatest] = useState<Memory | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [since, setSince] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
+  const reloadCheckins = checkins.reload;
+  const reloadPhotos = photos.reload;
+  const reloadNudges = nudges.reload;
 
   const load = useCallback(async () => {
     if (!coupleId) return;
@@ -29,10 +79,14 @@ export default function Home() {
       supabase.from('events').select('*').eq('couple_id', coupleId).gte('day', toISODate(today())).order('day').order('time', { nullsFirst: true }).limit(1),
       supabase.from('memories').select('*').eq('couple_id', coupleId).order('happened_on', { ascending: false }).order('created_at', { ascending: false }).limit(1),
       reloadQuestions(),
+      reloadCheckins(),
+      reloadPhotos(),
+      reloadMoods(),
+      reloadNudges(),
     ]);
     setNext((plans.data?.[0] as Plan | undefined) ?? null);
     setLatest((mems.data?.[0] as Memory | undefined) ?? null);
-  }, [coupleId, reloadQuestions]);
+  }, [coupleId, reloadQuestions, reloadCheckins, reloadPhotos, reloadMoods, reloadNudges]);
 
   useFocusEffect(
     useCallback(() => {
@@ -43,6 +97,11 @@ export default function Home() {
   if (!ctx) return null;
   const { profile, partner, couple, refresh } = ctx;
   const together = couple.together_since;
+  const days = together ? Math.max(0, daysBetween(parseISODate(together), today())) : 0;
+  const myMood = moods.find((m) => m.user_id === profile.id) ?? null;
+  const theirMood = moods.find((m) => m.user_id !== profile.id) ?? null;
+  const ci = checkins.today;
+  const ph = photos.today;
 
   async function saveSince() {
     if (!since) return;
@@ -62,8 +121,28 @@ export default function Home() {
         ? `${partner.name} answered. Your turn.`
         : 'Be the first to answer today.';
 
+  const checkinStatus = !ci?.mine
+    ? ci?.partner
+      ? `${partner.name} shared theirs. Your turn.`
+      : 'The best bit, the hard bit, and what\'s next.'
+    : ci.partner?.rose
+      ? `See ${partner.name}'s day`
+      : `Waiting for ${partner.name}`;
+
+  const photoStatus = !ph?.mine
+    ? ph?.partner
+      ? `${partner.name} added one. Add yours to see it.`
+      : 'Snap a moment from your day.'
+    : ph.partner?.photo_path
+      ? `See ${partner.name}'s photo`
+      : `Waiting for ${partner.name}`;
+
+  const done = [!!q?.mine, !!ci?.mine, !!ph?.mine, gesture.done].filter(Boolean).length;
+  const shadow = { textShadowColor: ink.shadow, textShadowRadius: 10, textShadowOffset: { width: 0, height: 1 } };
+
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.page }}>
+      <NudgeToast name={partner.name} ping={ping} />
       <ScrollView
         contentContainerStyle={{ padding: space.lg, paddingBottom: tabBarInset + space.xl, gap: space.md }}
         refreshControl={
@@ -77,66 +156,122 @@ export default function Home() {
             }}
           />
         }>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <View style={{ flex: 1 }}>
-            <T variant="eyebrow">{greeting()}</T>
-            <T variant="title" numberOfLines={1}>
-              {profile.name} & {partner.name}
-            </T>
+        <Hero height={together ? 290 : 250}>
+          <View style={{ flex: 1, padding: space.lg, justifyContent: 'space-between' }}>
+            <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View style={{ flex: 1 }}>
+                <T variant="eyebrow" color={ink.soft} style={shadow}>
+                  {greeting()}
+                </T>
+                <T variant="title" color={ink.ink} numberOfLines={1} style={shadow}>
+                  {profile.name} & {partner.name}
+                </T>
+              </View>
+              <Pressable
+                onPress={() => router.push('/settings')}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+                hitSlop={6}
+                style={({ pressed }) => ({
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: dark || ink.ink === '#FFFFFF' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.6)',
+                  opacity: pressed ? 0.7 : 1,
+                })}>
+                <Glyph name="settings" color={ink.ink} />
+              </Pressable>
+            </Row>
+            <View style={{ alignItems: 'center' }}>
+              <Row gap={0}>
+                <Avatar name={profile.name} size={52} />
+                <Heartbeat color={ink.ink === '#FFFFFF' ? '#FFFFFF' : c.accent} />
+                <Avatar name={partner.name} partner size={52} />
+              </Row>
+              {together ? (
+                <>
+                  <T variant="display" color={ink.ink} style={[{ fontSize: 56, lineHeight: 62, marginTop: 4, fontVariant: ['tabular-nums'] }, shadow]}>
+                    {days.toLocaleString('en-GB')}
+                  </T>
+                  <T variant="strong" color={ink.ink} style={[{ marginTop: -4 }, shadow]}>
+                    days together
+                  </T>
+                  <T variant="small" color={ink.soft} style={[{ marginTop: 2 }, shadow]}>
+                    {milestone(together, days)}
+                  </T>
+                </>
+              ) : (
+                <T variant="strong" color={ink.ink} style={[{ marginTop: space.sm }, shadow]}>
+                  Your love story starts here
+                </T>
+              )}
+            </View>
           </View>
-          <IconButton label="Settings" onPress={() => router.push('/settings')}>
-            <Glyph name="settings" color={c.ink} />
-          </IconButton>
-        </Row>
+        </Hero>
 
-        <View style={{ alignItems: 'center', paddingVertical: space.md, gap: 2 }}>
-          <Row gap={4}>
-            <Avatar name={profile.name} />
-            <Glyph name="heart" color={c.accent} size={26} />
-            <Avatar name={partner.name} partner />
-          </Row>
-          {together ? (
-            <>
-              <T style={{ fontSize: 52, lineHeight: 58, fontWeight: '800', letterSpacing: -2, color: c.accent, marginTop: space.sm, fontVariant: ['tabular-nums'] }}>
-                {Math.max(0, daysBetween(parseISODate(together), today())).toLocaleString('en-GB')}
+        {!together && (
+          <Card style={{ gap: space.md }}>
+            <T variant="strong">When did you two get together?</T>
+            <DateField label="Together since" value={since} onChange={setSince} maximumDate={today()} />
+            {saveError ? (
+              <T variant="small" color={c.danger}>
+                {saveError}
               </T>
-              <T variant="strong">days together</T>
-              <T variant="fine">Since {longDate(together)}</T>
-            </>
-          ) : (
-            <Card style={{ alignSelf: 'stretch', marginTop: space.md, gap: space.md }}>
-              <T variant="strong">When did you two get together?</T>
-              <DateField label="Together since" value={since} onChange={setSince} maximumDate={today()} />
-              {saveError ? <T variant="small" color={c.danger}>{saveError}</T> : null}
-              <Button title="Save" onPress={saveSince} disabled={!since} />
-            </Card>
-          )}
-        </View>
+            ) : null}
+            <Button title="Save" onPress={saveSince} disabled={!since} />
+          </Card>
+        )}
+
+        <NudgeButton partnerName={partner.name} theirs={nudges.theirs} mine={nudges.mine} onSend={nudges.send} />
+        <MoodRow mine={myMood} partner={theirMood} partnerName={partner.name} onPick={() => setMoodOpen(true)} />
+
+        <Row style={{ justifyContent: 'space-between', marginTop: space.md }}>
+          <T variant="heading">Today</T>
+          <T variant="small" muted style={{ fontWeight: '700' }}>
+            {done === 4 ? 'All done 💯' : `${done} of 4 done`}
+          </T>
+        </Row>
 
         <Card tone="accent" onPress={() => router.push('/question')} accessibilityLabel="Open today's question">
           <T variant="eyebrow" color={c.onAccent}>
-            Today&apos;s question
+            💬 Today&apos;s question
           </T>
           <T variant="heading" color={c.onAccent}>
             {q?.question?.text ?? 'Loading…'}
           </T>
           <Row gap={6}>
             <Glyph name={q?.mine ? 'check' : 'lock'} color={c.onAccent} size={14} />
-            <T variant="small" color={c.onAccent}>
+            <T variant="small" color={c.onAccent} style={{ flex: 1 }}>
               {qStatus}
             </T>
           </Row>
         </Card>
 
+        <Row gap={space.sm} style={{ alignItems: 'stretch' }}>
+          <TodayTile emoji="🌹" title="Rose, thorn, bud" status={checkinStatus} todo={!ci?.mine} onPress={() => router.push('/checkin')} />
+          <TodayTile emoji="📸" title="Photo of the day" status={photoStatus} todo={!ph?.mine} onPress={() => router.push('/photo-of-the-day')}>
+            <TilePhoto path={ph?.mine ? ph.partner?.photo_path : null} />
+          </TodayTile>
+        </Row>
+
+        <GestureCard text={gestureFor(dayNumber(), profile.id, partner.id)} done={gesture.done} onToggle={gesture.toggle} />
+
+        <T variant="heading" style={{ marginTop: space.md }}>
+          Coming up
+        </T>
         {next ? (
-          <Card onPress={() => router.push({ pathname: '/calendar', params: { day: next.day } })} accessibilityLabel={`Next up: ${next.title}`}>
+          <Card onPress={() => router.push({ pathname: '/calendar', params: { day: next.day } })} accessibilityLabel={`Next up: ${next.title}, ${countdown(next.day)}`}>
             <Row gap={space.lg}>
               <View style={{ width: 62, height: 62, borderRadius: radius.sm, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-                <T style={{ fontSize: 24, fontWeight: '800', color: c.accent, lineHeight: 26 }}>{parseISODate(next.day).getDate()}</T>
+                <T variant="title" style={{ fontSize: 24, color: c.accent, lineHeight: 28 }}>
+                  {parseISODate(next.day).getDate()}
+                </T>
                 <T variant="eyebrow">{parseISODate(next.day).toLocaleDateString('en-GB', { month: 'short' })}</T>
               </View>
               <View style={{ flex: 1, gap: 2 }}>
-                <T variant="eyebrow">Next up</T>
+                <T variant="eyebrow">{countdown(next.day)}</T>
                 <T variant="strong">{next.title}</T>
                 <T variant="small" muted>
                   {dayLabel(next.day)} · {timeLabel(next.time)}
@@ -148,7 +283,9 @@ export default function Home() {
           <Card onPress={() => router.push('/new-plan')}>
             <T variant="eyebrow">Next up</T>
             <T variant="strong">Nothing planned yet</T>
-            <T variant="small" muted>Tap to plan something together.</T>
+            <T variant="small" muted>
+              Tap to plan something, or swipe some date ideas in Together.
+            </T>
           </Card>
         )}
 
@@ -172,10 +309,27 @@ export default function Home() {
           <Card onPress={() => router.push('/new-memory')}>
             <T variant="eyebrow">Memories</T>
             <T variant="strong">Save your first memory</T>
-            <T variant="small" muted>A photo, a few words, and a date to remember.</T>
+            <T variant="small" muted>
+              A photo, a few words, and a date to remember.
+            </T>
           </Card>
         )}
+
+        {together ? (
+          <T variant="fine" style={{ textAlign: 'center', marginTop: space.sm }}>
+            Together since {longDate(together)} 💕
+          </T>
+        ) : null}
       </ScrollView>
+      <MoodPicker
+        open={moodOpen}
+        current={myMood}
+        onClose={() => setMoodOpen(false)}
+        onSave={async (emoji, word) => {
+          await saveMood(couple.id, profile.id, emoji, word);
+          await reloadMoods();
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 
 import { parseISODate, shortDate, timeLabel, toISODate, toTimeString } from '@/lib/dates';
-import { radius, space, useColors } from '@/lib/theme';
+import { fontFor, radius, space, useColors } from '@/lib/theme';
 
 /* Text ------------------------------------------------------------------- */
 
@@ -45,8 +45,12 @@ export function T({
 }: TextProps & { variant?: Variant; muted?: boolean; accent?: boolean; color?: string }) {
   const c = useColors();
   const tint = color ?? (accent || variant === 'eyebrow' ? c.accent : muted || variant === 'fine' ? c.muted : c.ink);
-  return <Text style={[textStyles[variant], { color: tint }, style]} {...rest} />;
+  const weight = (StyleSheet.flatten([textStyles[variant], style]) as TextStyle | undefined)?.fontWeight;
+  const font = fontFor(weight, DISPLAY.has(variant));
+  return <Text style={[textStyles[variant], { color: tint }, style, font]} {...rest} />;
 }
+
+const DISPLAY = new Set<Variant>(['display', 'title', 'heading']);
 
 /* Layout ----------------------------------------------------------------- */
 
@@ -128,7 +132,9 @@ export function Button({
       ) : (
         <Row gap={space.sm}>
           {icon}
-          <Text style={[textStyles.strong, { color: l.fg }]}>{title}</Text>
+          <T variant="strong" color={l.fg}>
+            {title}
+          </T>
         </Row>
       )}
     </Pressable>
@@ -205,7 +211,9 @@ export function Chip({ label, selected, onPress, disabled }: { label: string; se
         backgroundColor: selected ? c.accent : c.surface,
         opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
       })}>
-      <Text style={[textStyles.small, { fontWeight: '700', color: selected ? c.onAccent : c.ink }]}>{label}</Text>
+      <T variant="small" color={selected ? c.onAccent : c.ink} style={{ fontWeight: '700' }}>
+        {label}
+      </T>
     </Pressable>
   );
 }
@@ -235,6 +243,7 @@ export function Field({ label, style, ...rest }: TextInputProps & { label: strin
         style={[
           styles.input,
           { backgroundColor: c.surface, borderColor: focused ? c.accent : c.line, color: c.ink },
+          fontFor(400),
           rest.multiline && { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 },
           style as StyleProp<TextStyle>,
         ]}
@@ -338,7 +347,7 @@ export function Avatar({ name, partner, size = 56 }: { name: string; partner?: b
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-      <Text style={{ color: partner ? c.onAccent2 : c.onAccent, fontWeight: '800', fontSize: size * 0.4 }}>
+      <Text style={[{ color: partner ? c.onAccent2 : c.onAccent, fontWeight: '800', fontSize: size * 0.4 }, fontFor(800, true)]}>
         {(name.trim()[0] ?? '?').toUpperCase()}
       </Text>
     </View>
