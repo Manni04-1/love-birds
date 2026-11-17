@@ -1,13 +1,16 @@
 import { router } from 'expo-router';
 import { useUpdates } from 'expo-updates';
-import { useState, type ReactNode } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Alert, Linking, Pressable, ScrollView, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { Button, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { today } from '@/lib/dates';
+import { enableNotifications, type NotificationStatus } from '@/lib/notifications';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
+import type { BubbleStyle } from '@/lib/types';
 import { radius, space, useColors } from '@/lib/theme';
 import { downloadUpdate, restartIntoUpdate, updatesEnabled, versionLabel } from '@/lib/updates';
 
@@ -23,6 +26,41 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const LOOKS: { look: BubbleStyle; label: string; sample: string }[] = [
+  { look: 'hearts', label: 'Fuchsia with hearts', sample: 'Miss you 💕' },
+  { look: 'roses', label: 'Vines and roses', sample: 'Miss you too' },
+];
+
+function BubbleChoice({ look, label, sample, selected, onPress }: { look: BubbleStyle; label: string; sample: string; selected: boolean; onPress: () => void }) {
+  const c = useColors();
+  const dark = useColorScheme() === 'dark';
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      style={{ flex: 1, alignItems: 'center', gap: space.sm, paddingVertical: space.md, borderRadius: radius.md, borderWidth: 2, borderColor: selected ? c.accent : c.line, backgroundColor: c.page }}>
+      <LoveBubble look={look} mine={look === 'hearts'}>
+        <T color={bubbleInk(look, dark).text} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+          {sample}
+        </T>
+      </LoveBubble>
+      <T variant="small" style={{ textAlign: 'center' }}>
+        {selected ? '✓ ' : ''}
+        {label}
+      </T>
+    </Pressable>
+  );
+}
+
+const STATUS_TEXT: Record<NotificationStatus, string> = {
+  on: 'On. You\'ll hear the love chime for messages, plans, memories and answers, and get a reminder an hour before each plan.',
+  'reminders-only': 'Plan reminders work, but messages from your partner can\'t reach this phone yet.',
+  off: 'Off. Turn them on so you know when your partner writes.',
+  blocked: 'Turned off in your phone\'s settings. Open them, tap Notifications and switch them on.',
+};
+
 export default function Settings() {
   const c = useColors();
   const ctx = useCouple();
@@ -33,6 +71,16 @@ export default function Settings() {
   const { isUpdatePending } = useUpdates();
   const [checking, setChecking] = useState(false);
   const [updateNote, setUpdateNote] = useState('');
+  const [notif, setNotif] = useState<NotificationStatus | null>(null);
+  const [notifNote, setNotifNote] = useState('');
+  const userId = ctx?.userId;
+
+  useEffect(() => {
+    if (!userId) return;
+    enableNotifications(userId, false)
+      .then(setNotif)
+      .catch(() => setNotif('reminders-only'));
+  }, [userId]);
 
   if (!ctx) return null;
   const { profile, partner, couple, refresh, signOut } = ctx;
@@ -55,6 +103,26 @@ export default function Settings() {
     if (err) return setError(friendlyError(err));
     setSaved('Date saved');
     await refresh();
+  }
+
+  async function chooseBubble(look: BubbleStyle) {
+    setError('');
+    const { error: err } = await supabase.from('profiles').update({ bubble: look }).eq('id', profile.id);
+    if (err) return setError(friendlyError(err));
+    await refresh();
+  }
+
+  async function turnOnNotifications() {
+    setNotifNote('');
+    if (notif === 'blocked') return Linking.openSettings();
+    setNotif(await enableNotifications(profile.id, true));
+  }
+
+  async function sendTest() {
+    setNotifNote('');
+    const { data, error: err } = await supabase.rpc('send_test_notification');
+    if (err) return setNotifNote(friendlyError(err));
+    setNotifNote(data ? 'Sent. It should arrive in a few seconds.' : 'This phone isn\'t registered yet. Close the app and open it again.');
   }
 
   async function checkForUpdate() {
@@ -126,6 +194,26 @@ export default function Settings() {
           </Row>
           {saved ? <T variant="small" accent>{saved}</T> : null}
           <ErrorText>{error}</ErrorText>
+        </Group>
+
+        <Group label="Your chat bubble">
+          <T variant="small" muted>
+            Your messages show in this style on both phones. {partner.name} picks their own.
+          </T>
+          <Row gap={space.sm} style={{ alignItems: 'stretch' }}>
+            {LOOKS.map((l) => (
+              <BubbleChoice key={l.look} {...l} selected={profile.bubble === l.look} onPress={() => chooseBubble(l.look)} />
+            ))}
+          </Row>
+        </Group>
+
+        <Group label="Notifications">
+          <T variant="small">{notif ? STATUS_TEXT[notif] : 'Checking…'}</T>
+          {notif === 'on' && <Button title="Send me a test" variant="outline" onPress={sendTest} />}
+          {(notif === 'off' || notif === 'blocked') && (
+            <Button title={notif === 'blocked' ? 'Open phone settings' : 'Turn on notifications'} onPress={turnOnNotifications} />
+          )}
+          {notifNote ? <T variant="small" muted>{notifNote}</T> : null}
         </Group>
 
         <Group label="Privacy">

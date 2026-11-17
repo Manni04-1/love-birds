@@ -1,7 +1,11 @@
+export type BubbleStyle = 'hearts' | 'roses';
+
 export type Profile = {
   id: string;
   name: string;
   couple_id: string | null;
+  /** Chat bubble look: fuchsia with hearts, or thorny vines with roses. Null until chosen. */
+  bubble?: BubbleStyle | null;
 };
 
 export type Couple = {

@@ -1,9 +1,15 @@
 import { NativeTabs } from 'expo-router/native-tabs';
 
+import { useNotificationSetup, useNotificationTaps, useReminders } from '@/lib/notifications';
+import { useCouple } from '@/lib/session';
 import { useColors } from '@/lib/theme';
 
 export default function TabsLayout() {
   const c = useColors();
+  const ctx = useCouple();
+  useNotificationSetup(ctx?.userId);
+  useReminders(ctx?.couple.id);
+  useNotificationTaps();
   return (
     <NativeTabs
       backgroundColor={c.surface}

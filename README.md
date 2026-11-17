@@ -7,7 +7,7 @@ A private app for two: a shared calendar, a chat, a timeline of memories and pho
 ### 1. Set up the database
 
 1. Create a free account at [supabase.com](https://supabase.com) and make a new project. Pick the region closest to you.
-2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success".
+2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success". Then do the same with [`supabase/notifications.sql`](supabase/notifications.sql).
 3. While you're testing, turn off email confirmation so you can sign in straight away: **Authentication > Sign In / Providers > Email**, switch off **Confirm email**, and save. Turn it back on before you invite other couples.
 
 ### 2. Connect the app to the database
@@ -37,6 +37,17 @@ GitHub builds an installable app every time the code on `main` changes (see [`.g
 3. Open **Actions > Android app > Run workflow**. The build takes about 20 to 30 minutes.
 4. On each phone, open [the download link](https://github.com/Manni04-1/love-birds/releases/download/android-latest/love-birds.apk), open the file, and allow your browser to install apps when Android asks. Your data stays when you install a newer file over the old one.
 
+### Notifications
+
+Android delivers notifications through Firebase. Once:
+
+1. At [console.firebase.google.com](https://console.firebase.google.com), create a project. Add an Android app with package name `io.github.manni041.lovebirds`, download `google-services.json` and put it in this folder (it ships inside the app, so it's fine to commit).
+2. In Firebase, open **Project settings > Service accounts** and generate a new private key. Keep this file private.
+3. On [expo.dev](https://expo.dev), open the project, then **Credentials > Android**, and upload that key under **FCM V1 service account key**.
+4. Run [`supabase/notifications.sql`](supabase/notifications.sql) in the Supabase SQL Editor if you haven't yet.
+
+The database sends a notification through Expo when one of you sends a message, adds a plan or memory, answers the daily question or hearts something. Plan reminders (an hour before, or 9 AM for all-day plans) are scheduled on each phone. Every notification plays [`assets/sounds/love.wav`](assets/sounds/love.wav). **Settings > Notifications > Send me a test** checks the whole chain.
+
 ### Automatic updates
 
 Once the app is installed, most changes reach the phones by themselves through [EAS Update](https://docs.expo.dev/eas-update/introduction/). The app looks for a new version when it opens, downloads it in the background and offers to restart. **Settings > Check for updates** does the same on demand.
@@ -58,15 +69,15 @@ The next build on `main` links the app to an Expo project, and from then on ever
 | Home | Days together, today's question, next plan, latest memory |
 | Daily question | One question a day for both of you. Your partner's answer stays hidden until you've answered too |
 | Calendar | Month view, add plans with date, time and a note, long press to delete. Updates live when your partner adds something |
-| Chat | Text and photos, tap a message to heart it, "Seen" receipts, live updates |
+| Chat | Text and photos, tap a message to heart it, "Seen" receipts, live updates. Each of you picks a bubble: fuchsia with hearts, or thorny vines and roses |
+| Notifications | A soft love chime for messages, hearts, new plans and memories, and daily answers. Reminders an hour before plans |
 | Memories | Photo, caption, date and place, "Love" a memory, long press your own to delete |
-| Settings | Change your name and your together-since date, sign out, unlink, delete account |
+| Settings | Change your name, your bubble and your together-since date, test notifications, check for updates, sign out, unlink, delete account |
 
 Privacy: every table has row-level security, so only the two people in a couple can read its data. Photos sit in a private storage bucket, one folder per couple, and open through short-lived links.
 
 ## Not built yet
 
-- Push notifications and plan reminders (needs `expo-notifications` and a development build)
 - App lock with Face ID or a PIN (`expo-local-authentication`)
 - Sign in with Apple and Google
 - Working offline
@@ -84,4 +95,5 @@ npm run lint        # ESLint
 - `src/lib/session.tsx` loads the signed-in person, their couple and their partner. The root layout uses `Stack.Protected` to show sign-in, partner linking or the app.
 - `src/lib/supabase.ts` creates the client from `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 - Database changes go in `supabase/schema.sql`.
+- `src/lib/notifications.ts` registers for push, schedules plan reminders and opens the right screen when a notification is tapped. `supabase/notifications.sql` holds the triggers that send them. `src/components/love-bubble.tsx` draws the two chat bubbles.
 - `src/lib/updates.ts` handles over-the-air updates. The runtime version follows `version` in `app.json`, so raise it whenever a native package changes.

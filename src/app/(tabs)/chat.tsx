@@ -1,11 +1,13 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { Photo } from '@/components/photo';
 import { Avatar, Glyph, IconButton, Row, T } from '@/components/ui';
 import { clockLabel, dayLabel, toISODate } from '@/lib/dates';
+import { setChatOpen } from '@/lib/notifications';
 import { pickPhoto, uploadPhoto } from '@/lib/photos';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
@@ -14,6 +16,7 @@ import type { Message } from '@/lib/types';
 
 export default function Chat() {
   const c = useColors();
+  const dark = useColorScheme() === 'dark';
   const ctx = useCouple();
   const coupleId = ctx?.couple.id;
   const userId = ctx?.userId;
@@ -37,9 +40,11 @@ export default function Chat() {
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
+      setChatOpen(true);
       load().then(markRead);
       return () => {
         focused.current = false;
+        setChatOpen(false);
       };
     }, [load, markRead]),
   );
@@ -65,7 +70,7 @@ export default function Chat() {
   }, [coupleId, userId, markRead]);
 
   if (!ctx) return null;
-  const { partner, couple } = ctx;
+  const { partner, couple, profile } = ctx;
 
   async function send(body: string | null, imagePath: string | null) {
     setError('');
@@ -125,6 +130,17 @@ export default function Chat() {
           <T variant="fine">Just the two of you</T>
         </View>
       </Row>
+      {!profile.bubble && (
+        <Pressable
+          onPress={() => router.push('/settings')}
+          accessibilityRole="button"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.lg, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: c.accentSoft }}>
+          <T style={{ fontSize: 18 }}>💖🌹</T>
+          <T variant="small" style={{ flex: 1 }}>
+            Pick your chat bubble: fuchsia with hearts, or vines and roses. Tap to choose.
+          </T>
+        </Pressable>
+      )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
         <FlatList
           inverted
@@ -144,6 +160,18 @@ export default function Chat() {
           }
           renderItem={({ item: m, index }) => {
             const mine = m.sender_id === userId;
+            const look = (mine ? profile.bubble : partner.bubble) ?? null;
+            const textColor = look ? bubbleInk(look, dark).text : mine ? c.onAccent : c.ink;
+            const content = (
+              <>
+                {m.image_path && <Photo path={m.image_path} style={{ width: 220, height: 220, borderRadius: radius.md }} />}
+                {m.body ? (
+                  <T color={textColor} style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
+                    {m.body}
+                  </T>
+                ) : null}
+              </>
+            );
             const older = messages[index + 1];
             const newDay = !older || toISODate(new Date(older.created_at)) !== toISODate(new Date(m.created_at));
             return (
@@ -158,22 +186,27 @@ export default function Chat() {
                     onPress={() => toggleHeart(m)}
                     accessibilityRole="button"
                     accessibilityLabel={`${m.body ?? 'Photo'}. ${m.hearted ? 'Remove heart' : 'Send a heart'}`}
-                    style={{
-                      backgroundColor: mine ? c.accent : c.surface,
-                      borderColor: mine ? c.accent : c.line,
-                      borderWidth: 1,
-                      borderRadius: radius.lg,
-                      borderBottomRightRadius: mine ? 6 : radius.lg,
-                      borderBottomLeftRadius: mine ? radius.lg : 6,
-                      padding: m.image_path ? 4 : 0,
-                      overflow: 'hidden',
-                    }}>
-                    {m.image_path && <Photo path={m.image_path} style={{ width: 220, height: 220, borderRadius: radius.md }} />}
-                    {m.body ? (
-                      <T color={mine ? c.onAccent : c.ink} style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
-                        {m.body}
-                      </T>
-                    ) : null}
+                    style={
+                      look
+                        ? undefined
+                        : {
+                            backgroundColor: mine ? c.accent : c.surface,
+                            borderColor: mine ? c.accent : c.line,
+                            borderWidth: 1,
+                            borderRadius: radius.lg,
+                            borderBottomRightRadius: mine ? 6 : radius.lg,
+                            borderBottomLeftRadius: mine ? radius.lg : 6,
+                            padding: m.image_path ? 4 : 0,
+                            overflow: 'hidden',
+                          }
+                    }>
+                    {look ? (
+                      <LoveBubble look={look} mine={mine}>
+                        <View style={{ padding: m.image_path ? 4 : 0 }}>{content}</View>
+                      </LoveBubble>
+                    ) : (
+                      content
+                    )}
                   </Pressable>
                   {m.hearted && (
                     <View style={{ marginTop: -8, marginHorizontal: 8, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 }}>

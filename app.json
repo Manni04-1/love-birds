@@ -2,7 +2,8 @@
   "expo": {
     "name": "Love Birds",
     "slug": "love-birds",
-    "version": "1.0.0",
+    "owner": "manni04-1",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lovebirds",
@@ -11,6 +12,7 @@
       "policy": "appVersion"
     },
     "updates": {
+      "url": "https://u.expo.dev/2e19a979-9a8c-4016-b9c1-4f61c6badca6",
       "requestHeaders": {
         "expo-channel-name": "production"
       }
@@ -27,6 +29,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "io.github.manni041.lovebirds",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1
     },
     "web": {
@@ -51,11 +54,27 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#E0218A",
+          "defaultChannel": "love",
+          "sounds": [
+            "./assets/sounds/love.wav"
+          ]
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": false,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2e19a979-9a8c-4016-b9c1-4f61c6badca6"
+      }
     }
   }
 }
