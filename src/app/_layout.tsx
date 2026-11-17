@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { AppLock } from '@/components/app-lock';
 import { SessionProvider, useSession } from '@/lib/session';
 import { isThemeName, setCustomFonts, ThemeNameProvider, useColors } from '@/lib/theme';
 import { useAppUpdates } from '@/lib/updates';
@@ -89,7 +90,9 @@ export default function RootLayout() {
       <SessionProvider>
         <Themed>
           <StatusBar style="auto" />
-          <Routes />
+          <AppLock>
+            <Routes />
+          </AppLock>
         </Themed>
       </SessionProvider>
     </ThemeProvider>

@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { addDays, parseISODate, timeLabel, toISODate, today } from './dates';
+import { whileAway } from './lock';
 import { supabase } from './supabase';
 import type { Plan } from './types';
 
@@ -56,7 +57,7 @@ export async function enableNotifications(userId: string, ask: boolean): Promise
   await ensureChannel();
 
   let perm = await Notifications.getPermissionsAsync();
-  if (perm.status !== 'granted' && ask && perm.canAskAgain) perm = await Notifications.requestPermissionsAsync();
+  if (perm.status !== 'granted' && ask && perm.canAskAgain) perm = await whileAway(() => Notifications.requestPermissionsAsync());
   if (perm.status !== 'granted') return perm.canAskAgain ? 'off' : 'blocked';
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;

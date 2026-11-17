@@ -183,6 +183,9 @@ const GLYPHS = {
   close: { ios: 'xmark', android: 'close' },
   shuffle: { ios: 'shuffle', android: 'shuffle' },
   sparkles: { ios: 'sparkles', android: 'auto_awesome' },
+  backspace: { ios: 'delete.left', android: 'backspace' },
+  fingerprint: { ios: 'touchid', android: 'fingerprint' },
+  camera: { ios: 'camera', android: 'photo_camera' },
 } as const satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type GlyphName = keyof typeof GLYPHS;

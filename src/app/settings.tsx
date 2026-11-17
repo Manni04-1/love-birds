@@ -4,11 +4,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Switch, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
 import { Hero, heroInk } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
-import { Button, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
+import { Button, Chip, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { today } from '@/lib/dates';
 import { sharedHeat } from '@/lib/games';
+import { biometricsAvailable, lockSupported, setBiometrics, setLockAfter, type LockAfter } from '@/lib/lock';
 import { enableNotifications, eveningReminderOn, setEveningReminder, type NotificationStatus } from '@/lib/notifications';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
@@ -88,6 +90,12 @@ function ThemeChoice({ name, label, emoji, blurb, selected, onPress }: { name: T
   );
 }
 
+const LOCK_AFTER: { after: LockAfter; label: string }[] = [
+  { after: 0, label: 'Right away' },
+  { after: 60, label: 'After 1 minute' },
+  { after: 300, label: 'After 5 minutes' },
+];
+
 const HEATS: { heat: number; label: string; note: string }[] = [
   { heat: 0, label: 'Off', note: 'Light and deep questions only' },
   { heat: 1, label: 'Flirty', note: 'Playful and a little cheeky' },
@@ -117,6 +125,9 @@ export default function Settings() {
   const [notifNote, setNotifNote] = useState('');
   const [evening, setEvening] = useState(true);
   const [themeError, setThemeError] = useState('');
+  const { settings: lock, reload: reloadLock } = useAppLock();
+  const [pinTask, setPinTask] = useState<PinTask | null>(null);
+  const [canBio, setCanBio] = useState(false);
   const theme = useThemeName();
   const userId = ctx?.userId;
   const refreshCouple = ctx?.refresh;
@@ -135,6 +146,7 @@ export default function Settings() {
 
   useEffect(() => {
     eveningReminderOn().then(setEvening);
+    biometricsAvailable().then(setCanBio);
   }, []);
 
   if (!ctx) return null;
@@ -356,6 +368,64 @@ export default function Settings() {
           </Row>
         </Group>
 
+        {lockSupported && (
+          <Group label="App lock">
+            <Row style={{ justifyContent: 'space-between' }}>
+              <View style={{ flex: 1 }}>
+                <T variant="strong">Lock Love Birds</T>
+                <T variant="small" muted>
+                  Ask for a PIN when the app opens, so no one else can read your chats on this phone.
+                </T>
+              </View>
+              <Switch
+                value={lock.on}
+                onValueChange={(on) => setPinTask(on ? 'on' : 'off')}
+                trackColor={{ true: c.accent, false: c.line }}
+                thumbColor={c.surface}
+                accessibilityLabel="Lock Love Birds"
+              />
+            </Row>
+            {lock.on && canBio && (
+              <Row style={{ justifyContent: 'space-between' }}>
+                <T variant="strong" style={{ flex: 1 }}>
+                  Unlock with fingerprint
+                </T>
+                <Switch
+                  value={lock.biometrics}
+                  onValueChange={async (on) => {
+                    await setBiometrics(on);
+                    await reloadLock();
+                  }}
+                  trackColor={{ true: c.accent, false: c.line }}
+                  thumbColor={c.surface}
+                  accessibilityLabel="Unlock with fingerprint"
+                />
+              </Row>
+            )}
+            {lock.on && (
+              <>
+                <T variant="small" muted style={{ fontWeight: '700' }}>
+                  Lock after leaving the app
+                </T>
+                <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+                  {LOCK_AFTER.map((o) => (
+                    <Chip
+                      key={o.after}
+                      label={o.label}
+                      selected={lock.after === o.after}
+                      onPress={async () => {
+                        await setLockAfter(o.after);
+                        await reloadLock();
+                      }}
+                    />
+                  ))}
+                </Row>
+                <Button title="Change PIN" variant="outline" onPress={() => setPinTask('change')} />
+              </>
+            )}
+          </Group>
+        )}
+
         <Group label="Privacy">
           <T variant="small">
             Only you and {partner.name} can see your calendar, chat, memories and answers. Photos are stored privately and open only inside the app.
@@ -391,6 +461,7 @@ export default function Settings() {
           </Pressable>
         </Group>
       </ScrollView>
+      <PinSetup task={pinTask} onClose={() => setPinTask(null)} />
     </SafeAreaView>
   );
 }

@@ -3,7 +3,7 @@
     "name": "Love Birds",
     "slug": "love-birds",
     "owner": "manni04-1",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lovebirds",
@@ -22,7 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FADBE4",
+        "backgroundColor": "#D3325F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -43,7 +43,7 @@
         {
           "backgroundColor": "#D3325F",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 200
         }
       ],
       "@react-native-community/datetimepicker",
@@ -51,7 +51,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Love Birds uses your photos so you can share them with your partner.",
-          "cameraPermission": false,
+          "cameraPermission": "Love Birds uses your camera so you can take a photo of the day for your partner.",
           "microphonePermission": false
         }
       ],
@@ -64,6 +64,13 @@
           "sounds": [
             "./assets/sounds/love.wav"
           ]
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Love Birds uses Face ID to unlock the app."
         }
       ]
     ],
