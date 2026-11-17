@@ -10,6 +10,8 @@ export type Profile = {
   bubble?: BubbleStyle | null;
   /** Extra question decks switched on: 0 off, 1 flirty, 2 flirty and erotic. */
   heat?: number | null;
+  /** App theme: rose, steampunk, meadow, serengeti, diani or starry. */
+  theme?: string | null;
 };
 
 export type Couple = {
@@ -65,6 +67,8 @@ export type Answer = {
   /** Null when it's your partner's answer and you haven't answered yet. */
   body: string | null;
   created_at: string;
+  /** Set once the answer has been changed (it can be changed once). */
+  edited_at?: string | null;
 };
 
 export type DateIdea = {

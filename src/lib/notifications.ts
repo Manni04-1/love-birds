@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -6,7 +7,7 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 
-import { parseISODate, timeLabel, toISODate, today } from './dates';
+import { addDays, parseISODate, timeLabel, toISODate, today } from './dates';
 import { supabase } from './supabase';
 import type { Plan } from './types';
 
@@ -112,11 +113,18 @@ export function reminderTime(plan: Pick<Plan, 'day' | 'time'>): Date {
   return at;
 }
 
+const EVENING = 'evening-';
+
+async function cancelScheduled(match: (identifier: string) => boolean) {
+  const all = await Notifications.getAllScheduledNotificationsAsync();
+  await Promise.all(all.filter((n) => match(n.identifier)).map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)));
+}
+
 async function scheduleReminders(plans: Plan[]) {
   const perm = await Notifications.getPermissionsAsync();
   if (perm.status !== 'granted') return;
   await ensureChannel();
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  await cancelScheduled((id) => !id.startsWith(EVENING));
   const soon = Date.now() + 60_000;
   for (const plan of plans) {
     if (!plan.remind) continue;
@@ -153,17 +161,80 @@ export function useReminders(coupleId: string | undefined) {
         })
         .catch(() => {});
     };
+    const evening = () => {
+      queue = queue.then(() => scheduleEvening(coupleId)).catch(() => {});
+    };
     sync();
+    evening();
     const channel = supabase
       .channel(`reminders:${coupleId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `couple_id=eq.${coupleId}` }, sync)
       .subscribe();
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') sync();
+      if (state === 'active') {
+        sync();
+        evening();
+      }
     });
     return () => {
       supabase.removeChannel(channel);
       sub.remove();
     };
   }, [coupleId]);
+}
+
+// ---------------------------------------------------------------------------
+// The evening moment: 8 PM, a nudge to share your rose, thorn and bud and
+// your photo of the day. Scheduled a week ahead, and skipped for today once
+// you've checked in.
+// ---------------------------------------------------------------------------
+
+const EVENING_SETTING = 'evening-reminder';
+
+export async function eveningReminderOn(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(EVENING_SETTING)) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+async function scheduleEvening(coupleId: string) {
+  if (Platform.OS === 'web') return;
+  const perm = await Notifications.getPermissionsAsync();
+  if (perm.status !== 'granted') return;
+  await ensureChannel();
+  await cancelScheduled((id) => id.startsWith(EVENING));
+  if (!(await eveningReminderOn())) return;
+
+  const t = today();
+  const { data } = await supabase.from('checkins').select('day').eq('couple_id', coupleId).eq('day', toISODate(t));
+  const doneToday = !!data?.length;
+  const soon = Date.now() + 60_000;
+  for (let i = 0; i < 7; i++) {
+    if (i === 0 && doneToday) continue;
+    const at = addDays(t, i);
+    at.setHours(20, 0, 0, 0);
+    if (at.getTime() < soon) continue;
+    await Notifications.scheduleNotificationAsync({
+      identifier: `${EVENING}${toISODate(at)}`,
+      content: {
+        title: '🌹 Your evening moment',
+        body: 'Share a rose, a thorn and a bud, and your photo of the day.',
+        sound: SOUND,
+        data: { url: '/checkin' },
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
+    });
+  }
+}
+
+/** Reschedules the 8 PM reminder, for example after you check in or switch it off. */
+export async function refreshEveningReminder(coupleId: string) {
+  await scheduleEvening(coupleId).catch(() => {});
+}
+
+export async function setEveningReminder(coupleId: string, on: boolean) {
+  await AsyncStorage.setItem(EVENING_SETTING, on ? 'on' : 'off').catch(() => {});
+  await refreshEveningReminder(coupleId);
 }

@@ -1,18 +1,19 @@
 import { router } from 'expo-router';
 import { useUpdates } from 'expo-updates';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Linking, Pressable, ScrollView, useColorScheme, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Switch, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Hero, heroInk } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { Button, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { today } from '@/lib/dates';
 import { sharedHeat } from '@/lib/games';
-import { enableNotifications, type NotificationStatus } from '@/lib/notifications';
+import { enableNotifications, eveningReminderOn, setEveningReminder, type NotificationStatus } from '@/lib/notifications';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import type { BubbleStyle } from '@/lib/types';
-import { radius, space, useColors } from '@/lib/theme';
+import { radius, space, THEMES, useColors, useThemeName, type ThemeName } from '@/lib/theme';
 import { downloadUpdate, restartIntoUpdate, updatesEnabled, versionLabel } from '@/lib/updates';
 
 function Group({ label, children }: { label: string; children: ReactNode }) {
@@ -55,6 +56,38 @@ function BubbleChoice({ look, label, sample, selected, onPress }: { look: Bubble
   );
 }
 
+function ThemeChoice({ name, label, emoji, blurb, selected, onPress }: { name: ThemeName; label: string; emoji: string; blurb: string; selected: boolean; onPress: () => void }) {
+  const c = useColors();
+  const dark = useColorScheme() === 'dark';
+  const ink = heroInk(name, dark);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${label}. ${blurb}`}
+      style={({ pressed }) => ({ width: '48%', flexGrow: 1, gap: 6, opacity: pressed ? 0.85 : 1 })}>
+      <View style={{ borderRadius: radius.xl + 3, borderWidth: 3, borderColor: selected ? c.accent : 'transparent' }}>
+        <Hero height={96} theme={name}>
+          <View style={{ flex: 1, padding: space.sm, justifyContent: 'flex-end' }}>
+            <T variant="strong" color={ink.ink} style={{ textShadowColor: ink.shadow, textShadowRadius: 8 }}>
+              {emoji} {label}
+            </T>
+          </View>
+          {selected && (
+            <View style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+              <Glyph name="check" color={c.onAccent} size={14} />
+            </View>
+          )}
+        </Hero>
+      </View>
+      <T variant="fine" numberOfLines={2} style={{ paddingHorizontal: 4 }}>
+        {blurb}
+      </T>
+    </Pressable>
+  );
+}
+
 const HEATS: { heat: number; label: string; note: string }[] = [
   { heat: 0, label: 'Off', note: 'Light and deep questions only' },
   { heat: 1, label: 'Flirty', note: 'Playful and a little cheeky' },
@@ -82,6 +115,9 @@ export default function Settings() {
   const [updateNote, setUpdateNote] = useState('');
   const [notif, setNotif] = useState<NotificationStatus | null>(null);
   const [notifNote, setNotifNote] = useState('');
+  const [evening, setEvening] = useState(true);
+  const [themeError, setThemeError] = useState('');
+  const theme = useThemeName();
   const userId = ctx?.userId;
   const refreshCouple = ctx?.refresh;
 
@@ -97,8 +133,24 @@ export default function Settings() {
       .catch(() => setNotif('reminders-only'));
   }, [userId]);
 
+  useEffect(() => {
+    eveningReminderOn().then(setEvening);
+  }, []);
+
   if (!ctx) return null;
   const { profile, partner, couple, refresh, signOut } = ctx;
+
+  async function chooseTheme(name: ThemeName) {
+    setThemeError('');
+    const { error: err } = await supabase.from('profiles').update({ theme: name }).eq('id', profile.id);
+    if (err) return setThemeError(friendlyError(err));
+    await refresh();
+  }
+
+  async function toggleEvening(on: boolean) {
+    setEvening(on);
+    await setEveningReminder(couple.id, on);
+  }
 
   async function saveName() {
     setError('');
@@ -226,6 +278,18 @@ export default function Settings() {
           <ErrorText>{error}</ErrorText>
         </Group>
 
+        <Group label="Theme">
+          <T variant="small" muted>
+            Changes the colours and the moving picture on Home. Just for you: {partner.name} picks their own. Each theme has a light and a dark look that follows your phone.
+          </T>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
+            {THEMES.map((t) => (
+              <ThemeChoice key={t.name} {...t} selected={theme === t.name} onPress={() => chooseTheme(t.name)} />
+            ))}
+          </View>
+          <ErrorText>{themeError}</ErrorText>
+        </Group>
+
         <Group label="Your chat bubble">
           <T variant="small" muted>
             Your messages show in this style on both phones. {partner.name} picks their own.
@@ -275,6 +339,21 @@ export default function Settings() {
             <Button title={notif === 'blocked' ? 'Open phone settings' : 'Turn on notifications'} onPress={turnOnNotifications} />
           )}
           {notifNote ? <T variant="small" muted>{notifNote}</T> : null}
+          <Row style={{ justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <T variant="strong">Evening reminder</T>
+              <T variant="small" muted>
+                8 PM, for your rose, thorn and bud and your photo of the day. Skipped once you&apos;ve checked in.
+              </T>
+            </View>
+            <Switch
+              value={evening}
+              onValueChange={toggleEvening}
+              trackColor={{ true: c.accent, false: c.line }}
+              thumbColor={c.surface}
+              accessibilityLabel="Evening reminder"
+            />
+          </Row>
         </Group>
 
         <Group label="Privacy">
