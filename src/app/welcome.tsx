@@ -2,7 +2,8 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Card, Glyph, T } from '@/components/ui';
+import { LoveBirdsMark } from '@/components/mark';
+import { Button, Card, T } from '@/components/ui';
 import { isConfigured } from '@/lib/supabase';
 import { space, useColors } from '@/lib/theme';
 
@@ -12,10 +13,7 @@ export default function Welcome() {
     <SafeAreaView style={[styles.screen, { backgroundColor: c.page }]}>
       <View style={styles.hero}>
         <View style={[styles.logo, { backgroundColor: c.accent }]}>
-          <Glyph name="heart" color={c.onAccent} size={48} />
-          <View style={[styles.mini, { backgroundColor: c.accent2 }]}>
-            <Glyph name="heart" color={c.onAccent2} size={16} />
-          </View>
+          <LoveBirdsMark size={92} />
         </View>
         <T variant="display" style={{ textAlign: 'center' }}>
           Love Birds
@@ -43,6 +41,5 @@ export default function Welcome() {
 const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.lg },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
-  logo: { width: 100, height: 100, borderRadius: 32, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-6deg' }], marginBottom: space.sm },
-  mini: { position: 'absolute', right: -10, top: -10, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  logo: { width: 128, height: 128, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: space.sm },
 });

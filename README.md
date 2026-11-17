@@ -71,7 +71,7 @@ The next build on `main` links the app to an Expo project, and from then on ever
 | Mood | Pick an emoji and a word for how you feel today. It shows on your partner's Home, and they get a notification the first time each day |
 | Daily question | One question a day for both of you. Your partner's answer stays hidden until you've answered too. You can change your answer once, marked as edited |
 | Rose, thorn and bud | An evening check-in: the best bit of your day, the hard bit, and something you're looking forward to. Hidden until you've both shared |
-| Photo of the day | One photo from your day each. Your partner's stays hidden until you've added yours. You can swap yours the same day |
+| Photo of the day | One photo from your day each, from the camera or the gallery. Your partner's stays hidden until you've added yours. You can swap yours the same day |
 | Sweet gesture | A small idea each day for something kind to do. You each get a different one, so it stays a surprise |
 | Themes | Rose, Steampunk, Meadow, Serengeti, Diani Beach and Starry Night, each with a light and a dark look. You each pick your own |
 | Calendar | Month view, add plans with date, time and a note, long press to delete. Updates live when your partner adds something |
@@ -81,13 +81,13 @@ The next build on `main` links the app to an Expo project, and from then on ever
 | Date ideas | A deck of about 90 ideas (at home, going out, adventure, romantic and around Nairobi) to swipe right or left. When you both like one it's a match, with a notification. Plan a match straight into the calendar, then save it as a memory after the date. Add your own ideas, filter by type or free, and tap Surprise me |
 | Games | Would you rather and How well do you know me (with a score both ways): your partner's answers stay hidden until you've answered too. Talk decks to pull cards from: Light, Deep, Flirty and Erotic |
 | After dark | Flirty and Erotic questions appear only once you have both switched them on in Settings. The app only shows what's on for you both |
-| Settings | Change your name, your theme, your bubble, your together-since date and After dark, the evening reminder, test notifications, check for updates, sign out, unlink, delete account |
+| App lock | A 4-digit PIN, with fingerprint unlock if the phone has one. Locks right away, after 1 minute or after 5 minutes away. After five wrong PINs you wait a minute, then longer. Forgot PIN signs you out, which removes the lock. The PIN is kept in the phone's secure storage and never leaves it |
+| Settings | Change your name, your theme, the app lock, your bubble, your together-since date and After dark, the evening reminder, test notifications, check for updates, sign out, unlink, delete account |
 
 Privacy: every table has row-level security, so only the two people in a couple can read its data. Photos sit in a private storage bucket, one folder per couple, and open through short-lived links.
 
 ## Not built yet
 
-- App lock with Face ID or a PIN (`expo-local-authentication`)
 - Sign in with Apple and Google
 - Working offline
 - Store builds for the App Store and Google Play (with [EAS Build](https://docs.expo.dev/build/introduction/))
@@ -107,4 +107,6 @@ npm run lint        # ESLint
 - `supabase/together.sql` holds date ideas (with the built-in ideas), swipes, matches and game answers. Game questions live in `src/content/games.ts`: keep each question's key when you reword it, and give new questions new keys.
 - `supabase/daily.sql` holds moods, thinking-of-you taps, check-ins, photos of the day, the theme column and answer editing. `src/lib/daily.ts` reads and saves them, and `src/components/daily.tsx` draws them on Home. Moods and sweet gestures live in `src/content`.
 - `src/lib/theme.ts` holds the six themes' colours and the fonts (Bricolage Grotesque for headings, Nunito Sans for text). `src/components/hero.tsx` draws each theme's moving picture.
+- `src/lib/lock.ts` keeps the app lock in `expo-secure-store` (a salted SHA-256 of the PIN, the fingerprint choice and the wrong-PIN count). `src/components/app-lock.tsx` shows the lock screen and the PIN setup. Wrap anything that leaves the app on purpose (pickers, permission prompts) in `whileAway()` so it doesn't lock.
+- The app icon, splash and notification icon are drawn from one SVG mark (two love birds making a heart). `src/components/mark.tsx` draws the same mark inside the app.
 - `src/lib/updates.ts` handles over-the-air updates. The runtime version follows `version` in `app.json`, so raise it whenever a native package changes.

@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { clearLock } from './lock';
 import { forgetThisPhone } from './notifications';
 import { supabase } from './supabase';
 import type { Couple, Profile } from './types';
@@ -75,6 +76,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => load(userId), [load, userId]);
   const signOut = useCallback(async () => {
     if (userId) await forgetThisPhone(userId).catch(() => {});
+    // The lock belongs to the account on this phone, so the next person to sign in starts without it.
+    await clearLock().catch(() => {});
     await supabase.auth.signOut();
   }, [userId]);
 

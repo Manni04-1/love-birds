@@ -9,7 +9,7 @@ import { Photo } from '@/components/photo';
 import { Avatar, Button, ErrorText, Field, Glyph, Row, T } from '@/components/ui';
 import { saveDailyPhoto, useDailyPhotos, type DailyPhoto } from '@/lib/daily';
 import { dayLabel, today } from '@/lib/dates';
-import { pickPhoto, uploadPhoto, type PickedPhoto } from '@/lib/photos';
+import { pickPhoto, takePhoto, uploadPhoto, type PickedPhoto } from '@/lib/photos';
 import { useCouple } from '@/lib/session';
 import { friendlyError } from '@/lib/supabase';
 import { radius, space, useColors } from '@/lib/theme';
@@ -62,10 +62,10 @@ export default function PhotoOfTheDay() {
   if (!ctx) return null;
   const { profile, partner, couple, userId } = ctx;
 
-  async function choose() {
+  async function choose(from: 'camera' | 'gallery') {
     setError('');
     try {
-      const p = await pickPhoto();
+      const p = from === 'camera' ? await takePhoto() : await pickPhoto();
       if (p) setPicked(p);
     } catch (e) {
       setError(friendlyError(e));
@@ -108,9 +108,9 @@ export default function PhotoOfTheDay() {
                   : `Anything at all: your lunch, the view, your face. You'll see ${partner.name}'s once you've both added one.`}
               </T>
               <Pressable
-                onPress={choose}
+                onPress={() => choose('camera')}
                 accessibilityRole="button"
-                accessibilityLabel={picked ? 'Choose a different photo' : 'Choose a photo'}
+                accessibilityLabel={picked ? 'Take a different photo' : 'Take a photo'}
                 style={{
                   aspectRatio: 1,
                   borderRadius: radius.lg,
@@ -129,11 +129,15 @@ export default function PhotoOfTheDay() {
                   <>
                     <T style={{ fontSize: 44, lineHeight: 54 }}>📸</T>
                     <T muted style={{ fontWeight: '700' }}>
-                      Choose a photo
+                      Tap to take a photo
                     </T>
                   </>
                 )}
               </Pressable>
+              <Row gap={space.sm}>
+                <Button style={{ flex: 1 }} title="Camera" variant="outline" icon={<Glyph name="camera" color={c.ink} size={18} />} onPress={() => choose('camera')} />
+                <Button style={{ flex: 1 }} title="Gallery" variant="outline" icon={<Glyph name="photo" color={c.ink} size={18} />} onPress={() => choose('gallery')} />
+              </Row>
               <Field label="Caption (optional)" value={caption} onChangeText={setCaption} maxLength={140} placeholder="e.g. Chai break thinking of you" />
               <ErrorText>{error}</ErrorText>
               <Button title={swapping ? 'Swap my photo' : 'Share my photo'} onPress={share} loading={busy} disabled={!picked} />

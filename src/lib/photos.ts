@@ -2,21 +2,44 @@ import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 
+import { whileAway } from './lock';
 import { supabase } from './supabase';
 
 export type PickedPhoto = { uri: string; base64: string; mimeType: string };
 
-/** Opens the phone's photo library. Returns null if the person cancels. */
-export async function pickPhoto(): Promise<PickedPhoto | null> {
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 0.7,
-    base64: true,
-  });
+function toPicked(result: ImagePicker.ImagePickerResult): PickedPhoto | null {
   if (result.canceled) return null;
   const asset = result.assets[0];
   if (!asset?.base64) return null;
   return { uri: asset.uri, base64: asset.base64, mimeType: asset.mimeType ?? 'image/jpeg' };
+}
+
+/** Opens the phone's photo library. Returns null if the person cancels. */
+export async function pickPhoto(): Promise<PickedPhoto | null> {
+  const result = await whileAway(() =>
+    ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      base64: true,
+    }),
+  );
+  return toPicked(result);
+}
+
+/** Opens the camera. Returns null if the person cancels, or throws if the camera isn't allowed. */
+export async function takePhoto(): Promise<PickedPhoto | null> {
+  const perm = await whileAway(() => ImagePicker.requestCameraPermissionsAsync());
+  if (!perm.granted) {
+    throw new Error(perm.canAskAgain ? 'Allow the camera to take a photo.' : 'The camera is turned off for Love Birds. Turn it on in your phone\'s settings.');
+  }
+  const result = await whileAway(() =>
+    ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      base64: true,
+    }),
+  );
+  return toPicked(result);
 }
 
 /** Uploads into the couple's private folder and returns the storage path. */

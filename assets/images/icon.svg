@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
+<!-- Love Birds app icon: two love birds whose bodies make a heart. The PNG icons in this folder are rendered from this drawing. -->
+<defs>
+<linearGradient id="g" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#FF7A9C"/><stop offset="1" stop-color="#C2185B"/></linearGradient>
+<radialGradient id="glow" cx="0.5" cy="0.47" r="0.42"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="100" height="100" fill="url(#g)"/><rect width="100" height="100" fill="url(#glow)"/>
+<g transform="translate(50 51) scale(0.7) translate(-50 -48)"><g>
+<path d="M50 87 C42 92 35 95 27 95.5 C34 92 40 88 45 83 Z" fill="#FFC2D4"/>
+<path d="M50 87 C24 71 8 55 8 37 C8 21 19 11 32 10 C38 9.6 43 11 46 14 L44 27
+             C31 28 24.5 33.5 25 42 C25.5 56 36 70 50 87 Z" fill="#FFFFFF"/>
+<circle cx="39.5" cy="20" r="10.2" fill="#FFFFFF"/>
+<path d="M13.5 35 C12.5 48 20 60 33 69 C27.5 59.5 24.5 50 24.6 40.5 C21.5 36.5 17.5 34.5 13.5 35 Z" fill="#FFC2D4"/>
+<path d="M47.6 15.6 L51.8 19.9 L47.6 24 Z" fill="#FF8A3D"/>
+<circle cx="42" cy="17.6" r="1.9" fill="#B3164F"/>
+</g><g transform="translate(100 0) scale(-1 1)">
+<path d="M50 87 C42 92 35 95 27 95.5 C34 92 40 88 45 83 Z" fill="#F2A93B"/>
+<path d="M50 87 C24 71 8 55 8 37 C8 21 19 11 32 10 C38 9.6 43 11 46 14 L44 27
+             C31 28 24.5 33.5 25 42 C25.5 56 36 70 50 87 Z" fill="#FFD27A"/>
+<circle cx="39.5" cy="20" r="10.2" fill="#FFD27A"/>
+<path d="M13.5 35 C12.5 48 20 60 33 69 C27.5 59.5 24.5 50 24.6 40.5 C21.5 36.5 17.5 34.5 13.5 35 Z" fill="#F2A93B"/>
+<path d="M47.6 15.6 L51.8 19.9 L47.6 24 Z" fill="#FF8A3D"/>
+<circle cx="42" cy="17.6" r="1.9" fill="#7A1238"/>
+</g>
+<g transform="translate(45.5 -1.5) scale(0.38)"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FFFFFF"/></g></g>
+</svg>
