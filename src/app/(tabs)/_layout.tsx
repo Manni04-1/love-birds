@@ -11,6 +11,7 @@ import { specialDays } from '@/lib/special-days';
 import { useMilestones } from '@/lib/story';
 import { useColors } from '@/lib/theme';
 import { useUnreadCount } from '@/lib/unread';
+import { useWidgetSync } from '@/widgets/sync';
 
 /** Hearts your partner sends float up whichever tab you're on. */
 function Hearts({ children }: { children: ReactNode }) {
@@ -49,6 +50,11 @@ function Tabs() {
   useNotificationSetup(ctx?.userId);
   useReminders(ctx?.couple.id, specials);
   useNotificationTaps();
+  // Anything a widget shows: when one of these changes, the widgets draw again.
+  const p = ctx?.profile;
+  useWidgetSync(
+    ctx ? [ctx.userId, ctx.couple.id, together, p?.name, p?.animal, p?.theme, p?.partner_nickname, p?.private_notifications, name, ctx.partner.animal].join('|') : null,
+  );
   const unread = useUnreadCount(ctx?.couple.id, ctx?.userId);
   return (
     <NativeTabs

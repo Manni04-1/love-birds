@@ -1,11 +1,11 @@
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Pressable, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
+import { ActivityIndicator, Animated, Modal, PanResponder, Pressable, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReducedMotion } from '@/components/hero';
 import { Glyph, Row, T } from '@/components/ui';
-import { useSignedUrl } from '@/lib/photos';
+import { savePhoto, useSignedUrl } from '@/lib/photos';
 
 export type ViewerPhoto = { path: string; caption?: string | null; note?: string | null };
 
@@ -147,6 +147,7 @@ export function PhotoViewer({ photos, start, onClose, slideshow }: { photos: Vie
   const [playing, setPlaying] = useState(!!slideshow);
   const [fade] = useState(() => new Animated.Value(1));
   const [shown, setShown] = useState<number | null>(null);
+  const [saving, setSaving] = useState<{ path: string; state: 'saving' | 'saved' | 'error'; note?: string } | null>(null);
   const open = start !== null && photos.length > 0;
 
   // Start where you tapped each time the viewer opens.
@@ -178,6 +179,19 @@ export function PhotoViewer({ photos, start, onClose, slideshow }: { photos: Vie
 
   if (!open) return null;
   const photo = photos[Math.min(index, photos.length - 1)];
+  // How saving went, for the photo on screen.
+  const saved = saving?.path === photo.path ? saving : null;
+
+  async function save(path: string) {
+    setPlaying(false);
+    setSaving({ path, state: 'saving' });
+    try {
+      await savePhoto(path);
+      setSaving({ path, state: 'saved' });
+    } catch (e) {
+      setSaving({ path, state: 'error', note: e instanceof Error && e.message ? e.message : 'Couldn\'t save the photo. Try again.' });
+    }
+  }
 
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
@@ -218,8 +232,33 @@ export function PhotoViewer({ photos, start, onClose, slideshow }: { photos: Vie
                     </T>
                   </Pressable>
                 )}
+                <Pressable
+                  onPress={() => saved?.state !== 'saving' && save(photo.path)}
+                  accessibilityRole="button"
+                  accessibilityLabel={saved?.state === 'saved' ? 'Saved to your phone' : saved?.state === 'saving' ? 'Saving to your phone' : 'Save to your phone'}
+                  accessibilityState={{ busy: saved?.state === 'saving' }}
+                  hitSlop={12}
+                  style={{ height: 44, minWidth: 44, paddingHorizontal: saved?.state === 'saved' ? 14 : 0, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}>
+                  {saved?.state === 'saving' ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Glyph name={saved?.state === 'saved' ? 'check' : 'download'} color="#FFFFFF" />
+                  )}
+                  {saved?.state === 'saved' ? (
+                    <T variant="small" color="#FFFFFF" style={{ fontWeight: '700' }}>
+                      Saved
+                    </T>
+                  ) : null}
+                </Pressable>
               </Row>
             </Row>
+            {saved?.state === 'error' && (
+              <View pointerEvents="none" style={{ position: 'absolute', top: insets.top + 64, left: 24, right: 24, alignItems: 'center' }}>
+                <T variant="small" color="#FFFFFF" style={{ backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, overflow: 'hidden', textAlign: 'center' }}>
+                  {saved.note}
+                </T>
+              </View>
+            )}
             {(photo.caption || photo.note) && (
               <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 20, paddingBottom: insets.bottom + 24, backgroundColor: 'rgba(0,0,0,0.5)', gap: 4 }}>
                 {photo.caption ? <T color="#FFFFFF" style={{ fontWeight: '600' }}>{photo.caption}</T> : null}
