@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, DateField, ErrorText, Field, Glyph, Row, T } from '@/components/ui';
@@ -59,7 +59,7 @@ export default function NewMemory() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
           <T variant="title">{params.match ? 'How was your date?' : 'New memory'}</T>
           <Pressable

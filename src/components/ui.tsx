@@ -1,6 +1,6 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -35,19 +35,51 @@ const textStyles = StyleSheet.create({
   eyebrow: { fontSize: 11.5, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
 });
 
+// Emoji, and the joiners and skin tones that hold them together.
+const EMOJI_RUN =
+  /((?:[0-9#*]\uFE0F?\u20E3|[\u00A9\u00AE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2600-\u27BF\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\u3030\u303D\u3297\u3299\uFE0F\u200D]|[\uD83C-\uD83E][\uDC00-\uDFFF]|\uDB40[\uDC20-\uDC7F])+)/;
+
+/**
+ * Android draws some emoji wrongly (only their outlines, in odd colours) when they
+ * fall back from a custom font. So emoji always use the phone's own font.
+ */
+const EMOJI_FONT = { fontFamily: Platform.select({ android: 'sans-serif', ios: 'System', default: undefined }) };
+
+function withPhoneEmoji(children: ReactNode): ReactNode {
+  if (typeof children === 'string') {
+    if (!EMOJI_RUN.test(children)) return children;
+    return children.split(EMOJI_RUN).map((part, i) =>
+      i % 2 === 1 ? (
+        <Text key={i} style={EMOJI_FONT}>
+          {part}
+        </Text>
+      ) : (
+        part
+      ),
+    );
+  }
+  if (Array.isArray(children)) return children.map((child, i) => (typeof child === 'string' ? <Fragment key={i}>{withPhoneEmoji(child)}</Fragment> : child));
+  return children;
+}
+
 export function T({
   variant = 'body',
   muted,
   accent,
   color,
   style,
+  children,
   ...rest
 }: TextProps & { variant?: Variant; muted?: boolean; accent?: boolean; color?: string }) {
   const c = useColors();
   const tint = color ?? (accent || variant === 'eyebrow' ? c.accent : muted || variant === 'fine' ? c.muted : c.ink);
   const weight = (StyleSheet.flatten([textStyles[variant], style]) as TextStyle | undefined)?.fontWeight;
   const font = fontFor(weight, DISPLAY.has(variant));
-  return <Text style={[textStyles[variant], { color: tint }, style, font]} {...rest} />;
+  return (
+    <Text style={[textStyles[variant], { color: tint }, style, font]} {...rest}>
+      {font.fontFamily ? withPhoneEmoji(children) : children}
+    </Text>
+  );
 }
 
 const DISPLAY = new Set<Variant>(['display', 'title', 'heading']);
@@ -245,8 +277,8 @@ export function Field({ label, style, ...rest }: TextInputProps & { label: strin
         }}
         style={[
           styles.input,
+          // The phone's own font, so emoji you type look right.
           { backgroundColor: c.surface, borderColor: focused ? c.accent : c.line, color: c.ink },
-          fontFor(400),
           rest.multiline && { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 },
           style as StyleProp<TextStyle>,
         ]}
