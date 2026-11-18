@@ -22,6 +22,8 @@ export type Profile = {
   partner_nickname?: string | null;
   /** Set on your partner's profile only: their own name, when you've given them a pet name. */
   real_name?: string;
+  /** Notifications say "New message" instead of showing what your partner wrote. */
+  private_notifications?: boolean | null;
 };
 
 export type Couple = {
@@ -63,13 +65,27 @@ export type Message = {
   unsent_at?: string | null;
   audio_path?: string | null;
   audio_ms?: number | null;
+  /** An animal sticker, such as lion:miss-you. */
+  sticker?: string | null;
 };
 
 /** One person's reaction to a message. A null emoji means it was taken back. */
 export type Reaction = { message_id: string; user_id: string; emoji: string | null; updated_at: string };
 
-/** An open-when letter. The body is null for a letter to you that you haven't opened yet. */
-export type Letter = { id: string; from_user: string; occasion: string; body: string | null; opened_at: string | null; created_at: string };
+/**
+ * An open-when letter. The body (and photo) are null for a letter to you that you haven't opened yet.
+ * A time capsule has an unlock_at and can't be opened before then.
+ */
+export type Letter = {
+  id: string;
+  from_user: string;
+  occasion: string;
+  body: string | null;
+  opened_at: string | null;
+  created_at: string;
+  unlock_at?: string | null;
+  photo_path?: string | null;
+};
 
 export type BucketItem = {
   id: string;
@@ -142,3 +158,85 @@ export type GameAnswer = {
   partner_choice: number | null;
   partner_guess: number | null;
 };
+
+/** Tonight: the latest thing you're deciding together, from get_tonight(). */
+export type Decider = {
+  id: string;
+  kind: 'eat' | 'watch' | 'do';
+  options: { key: string; emoji: string; label: string }[];
+  created_by: string;
+  /** Who has swiped through every option. */
+  done_by: string[];
+  winner: string | null;
+  decided_at: string | null;
+  created_at: string;
+  /** Your own swipes: option key to liked. */
+  mine: Record<string, boolean>;
+};
+
+export type ListName = 'groceries' | 'todo' | 'watch';
+
+export type ListItem = {
+  id: string;
+  couple_id: string;
+  list: ListName;
+  text: string;
+  done_at: string | null;
+  done_by: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type HomeSafe = { id: number; from_user: string; kind: 'ask' | 'safe'; created_at: string };
+
+export type Wish = {
+  id: string;
+  couple_id: string;
+  user_id: string;
+  title: string;
+  emoji: string | null;
+  note: string | null;
+  link: string | null;
+  received_on: string | null;
+  created_at: string;
+};
+
+export type Milestone = {
+  id: string;
+  couple_id: string;
+  title: string;
+  emoji: string | null;
+  /** YYYY-MM-DD */
+  happened_on: string;
+  note: string | null;
+  yearly: boolean;
+  created_by: string;
+  created_at: string;
+};
+
+export type Coupon = {
+  id: string;
+  couple_id: string;
+  from_user: string;
+  title: string;
+  emoji: string | null;
+  note: string | null;
+  redeemed_at: string | null;
+  done_at: string | null;
+  created_at: string;
+};
+
+export type Fund = {
+  id: string;
+  couple_id: string;
+  title: string;
+  emoji: string | null;
+  /** Kenyan shillings. */
+  target: number;
+  bucket_item: string | null;
+  reached_at: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type FundEntry = { id: string; fund_id: string; user_id: string; amount: number; note: string | null; created_at: string };

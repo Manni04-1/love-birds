@@ -8,6 +8,7 @@ import { useNotificationSetup, useNotificationTaps, useReminders } from '@/lib/n
 import { RoomProvider, useRoom } from '@/lib/room';
 import { useCouple } from '@/lib/session';
 import { specialDays } from '@/lib/special-days';
+import { useMilestones } from '@/lib/story';
 import { useColors } from '@/lib/theme';
 import { useUnreadCount } from '@/lib/unread';
 
@@ -40,9 +41,10 @@ function Tabs() {
   const mine = ctx?.profile.birthday;
   const theirs = ctx?.partner.birthday;
   const name = ctx?.partner.name ?? '';
+  const { milestones } = useMilestones(ctx?.couple.id, 'tabs');
   const specials = useMemo(
-    () => specialDays(today(), addDays(today(), 60), { togetherSince: together, myBirthday: mine, partnerBirthday: theirs, partnerName: name }),
-    [together, mine, theirs, name],
+    () => specialDays(today(), addDays(today(), 60), { togetherSince: together, myBirthday: mine, partnerBirthday: theirs, partnerName: name, story: milestones }),
+    [together, mine, theirs, name, milestones],
   );
   useNotificationSetup(ctx?.userId);
   useReminders(ctx?.couple.id, specials);

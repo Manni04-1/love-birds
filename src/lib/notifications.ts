@@ -128,6 +128,7 @@ const SPECIAL_BODY: Record<SpecialDay['kind'], string> = {
   milestone: 'Another hundred days of you two. Celebrate a little today.',
   valentine: 'Happy Valentine\'s Day, love birds 💘',
   holiday: '',
+  story: 'A little anniversary of your story. Remember it together today 💞',
 };
 
 async function scheduleReminders(plans: Plan[], specials: SpecialDay[]) {

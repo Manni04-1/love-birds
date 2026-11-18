@@ -3,14 +3,17 @@ import { useCallback, useState } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Critters } from '@/components/critters';
 import { GestureCard, MoodPicker, MoodRow, NudgeButton, NudgeToast, TilePhoto, TodayTile } from '@/components/daily';
 import { HeartShape, Hero, heroInk, usePulse, useReducedMotion } from '@/components/hero';
+import { HomeSafeCard } from '@/components/home-safe';
 import { Photo } from '@/components/photo';
 import { Avatar, Button, Card, DateField, Glyph, Row, T } from '@/components/ui';
 import { gestureFor } from '@/content/gestures';
 import { saveMood, useCheckins, useDailyPhotos, useGestureDone, useMoods, useNudges } from '@/lib/daily';
 import { dayLabel, dayNumber, daysBetween, greeting, longDate, parseISODate, shortDate, timeLabel, toISODate, today } from '@/lib/dates';
 import { useQuestions } from '@/lib/questions';
+import { monthKey, shiftMonth } from '@/lib/recap';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { radius, space, tabBarInset, useColors, useThemeName } from '@/lib/theme';
@@ -39,6 +42,12 @@ function milestone(since: string, days: number): string {
   if (days > 0 && days % 100 === 0) return `🎉 ${days.toLocaleString('en-GB')} days today!`;
   const next = Math.ceil((days + 1) / 100) * 100;
   return `${next - days} ${next - days === 1 ? 'day' : 'days'} until day ${next.toLocaleString('en-GB')}`;
+}
+
+/** During the first week of a month, last month's recap. */
+function recapMonth(): Date | null {
+  const t = today();
+  return t.getDate() <= 7 ? shiftMonth(t, -1) : null;
 }
 
 function countdown(day: string): string {
@@ -138,6 +147,11 @@ export default function Home() {
       : `Waiting for ${partner.name}`;
 
   const done = [!!q?.mine, !!ci?.mine, !!ph?.mine, gesture.done].filter(Boolean).length;
+  // Your animals snuggle up once you've both done something today.
+  const meToday = done > 0 || !!myMood || nudges.mine > 0;
+  const themToday = !!q?.partner || !!ci?.partner || !!ph?.partner || !!theirMood || nudges.theirs > 0;
+  const recap = recapMonth();
+  const heart = ink.ink === '#FFFFFF' ? '#FFFFFF' : c.accent;
   const shadow = { textShadowColor: ink.shadow, textShadowRadius: 10, textShadowOffset: { width: 0, height: 1 } };
 
   return (
@@ -156,7 +170,7 @@ export default function Home() {
             }}
           />
         }>
-        <Hero height={together ? 290 : 250}>
+        <Hero height={together ? 336 : 296}>
           <View style={{ flex: 1, padding: space.lg, justifyContent: 'space-between' }}>
             <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <View style={{ flex: 1 }}>
@@ -187,7 +201,7 @@ export default function Home() {
             <View style={{ alignItems: 'center' }}>
               <Row gap={0}>
                 <Avatar name={profile.name} size={52} />
-                <Heartbeat color={ink.ink === '#FFFFFF' ? '#FFFFFF' : c.accent} />
+                <Heartbeat color={heart} />
                 <Avatar name={partner.name} partner size={52} />
               </Row>
               {together ? (
@@ -208,8 +222,27 @@ export default function Home() {
                 </T>
               )}
             </View>
+            <Critters mine={profile.animal} theirs={partner.animal} close={meToday && themToday} ping={ping} heart={heart} />
           </View>
         </Hero>
+
+        {recap && (
+          <Card
+            tone="soft"
+            onPress={() => router.push({ pathname: '/recap', params: { month: monthKey(recap) } })}
+            accessibilityLabel={`Your ${recap.toLocaleDateString('en-GB', { month: 'long' })} together. See your monthly recap.`}>
+            <Row gap={space.md}>
+              <T style={{ fontSize: 30, lineHeight: 36 }}>📊</T>
+              <View style={{ flex: 1 }}>
+                <T variant="strong">Your {recap.toLocaleDateString('en-GB', { month: 'long' })} together</T>
+                <T variant="small" muted>
+                  Your monthly recap is ready. See what you two got up to.
+                </T>
+              </View>
+              <Glyph name="next" color={c.muted} size={18} />
+            </Row>
+          </Card>
+        )}
 
         {!together && (
           <Card style={{ gap: space.md }}>
@@ -226,6 +259,7 @@ export default function Home() {
 
         <NudgeButton partnerName={partner.name} theirs={nudges.theirs} mine={nudges.mine} onSend={nudges.send} />
         <MoodRow mine={myMood} partner={theirMood} partnerName={partner.name} onPick={() => setMoodOpen(true)} />
+        <HomeSafeCard coupleId={couple.id} userId={profile.id} partnerName={partner.name} />
 
         <Row style={{ justifyContent: 'space-between', marginTop: space.md }}>
           <T variant="heading">Today</T>

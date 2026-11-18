@@ -7,7 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { Photo } from '@/components/photo';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
+import { StickerArt, StickerPicker } from '@/components/sticker';
 import { Avatar, Button, DateField, Glyph, IconButton, Row, Sheet, T } from '@/components/ui';
+import { parseSticker } from '@/content/stickers';
 import { addDays, clockLabel, dayLabel, toISODate, today } from '@/lib/dates';
 import { setChatOpen } from '@/lib/notifications';
 import { pickPhoto, uploadPhoto } from '@/lib/photos';
@@ -26,7 +28,14 @@ const now = () => Date.now();
 const waiting = (m: Message) => !!m.deliver_at && new Date(m.deliver_at).getTime() > now();
 /** You can change or unsend your message for 15 minutes, or any time before a scheduled one goes. */
 const changeable = (m: Message) => !m.unsent_at && (waiting(m) || now() - new Date(sentAt(m)).getTime() < EDIT_WINDOW);
-const snippet = (m: Message | undefined) => (!m ? 'A message' : m.unsent_at ? 'Unsent message' : (m.body ?? (m.audio_path ? '🎤 Voice note' : '📷 Photo')));
+const snippet = (m: Message | undefined) => {
+  if (!m) return 'A message';
+  if (m.unsent_at) return 'Unsent message';
+  if (m.body) return m.body;
+  const sticker = parseSticker(m.sticker);
+  if (sticker) return `${sticker.emoji} Sticker: ${sticker.text}`;
+  return m.audio_path ? '🎤 Voice note' : '📷 Photo';
+};
 
 function sortMessages(list: Message[]) {
   return [...list].sort((a, b) => sentAt(b).localeCompare(sentAt(a)));
@@ -121,6 +130,7 @@ export default function Chat() {
   const [pickDay, setPickDay] = useState<string | null>(null);
   const [pickTime, setPickTime] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ photos: ViewerPhoto[]; start: number } | null>(null);
+  const [stickers, setStickers] = useState(false);
   const [sealed, setSealed] = useState(0);
   const [, setTick] = useState(0);
   const focused = useRef(false);
@@ -245,6 +255,15 @@ export default function Chat() {
     }
   }
 
+  async function sendSticker(sticker: string) {
+    setStickers(false);
+    setError('');
+    const { data, error: err } = await supabase.from('messages').insert({ couple_id: couple.id, sticker, reply_to: replyTo?.id ?? null }).select().single();
+    if (err) return setError(friendlyError(err));
+    setReplyTo(null);
+    setMessages((prev) => sortMessages(prev.some((x) => x.id === data.id) ? prev : [data as Message, ...prev]));
+  }
+
   async function sendPhoto() {
     const photo = await pickPhoto();
     if (!photo) return;
@@ -359,6 +378,9 @@ export default function Chat() {
             {status}
           </T>
         </View>
+        <IconButton label="Search and saved messages" onPress={() => router.push('/chat-search')}>
+          <Glyph name="search" color={c.ink} />
+        </IconButton>
         <View>
           <IconButton label={sealed ? `Open-when letters, ${sealed} sealed for you` : 'Open-when letters'} onPress={() => router.push('/letters')}>
             <Glyph name="mail" color={c.ink} />
@@ -410,9 +432,11 @@ export default function Chat() {
           renderItem={({ item: m, index }) => {
             const mine = m.sender_id === userId;
             const unsent = !!m.unsent_at;
-            const look = unsent ? null : ((mine ? profile.bubble : partner.bubble) ?? null);
-            const textColor = look ? bubbleInk(look, dark).text : mine && !unsent ? c.onAccent : c.ink;
-            const fineColor = look ? bubbleInk(look, dark).fine : mine ? c.onAccent : c.muted;
+            const isSticker = !!m.sticker && !unsent;
+            const look = unsent || isSticker ? null : ((mine ? profile.bubble : partner.bubble) ?? null);
+            const onAccent = mine && !unsent && !isSticker;
+            const textColor = look ? bubbleInk(look, dark).text : onAccent ? c.onAccent : c.ink;
+            const fineColor = look ? bubbleInk(look, dark).fine : onAccent ? c.onAccent : c.muted;
             const quoted = m.reply_to ? byId.get(m.reply_to) : undefined;
             const content = unsent ? (
               <T color={c.muted} style={{ paddingHorizontal: 14, paddingVertical: 10, fontStyle: 'italic' }}>
@@ -421,7 +445,7 @@ export default function Chat() {
             ) : (
               <>
                 {m.reply_to && (
-                  <View style={{ marginHorizontal: 8, marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, borderLeftWidth: 3, borderLeftColor: mine && !look ? c.onAccent : c.accent, borderRadius: 8, backgroundColor: 'rgba(127,127,127,0.15)' }}>
+                  <View style={{ marginHorizontal: 8, marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, borderLeftWidth: 3, borderLeftColor: onAccent && !look ? c.onAccent : c.accent, borderRadius: 8, backgroundColor: 'rgba(127,127,127,0.15)' }}>
                     <T variant="fine" color={fineColor} style={{ fontWeight: '700' }}>
                       {quoted?.sender_id === userId ? 'You' : partner.name}
                     </T>
@@ -431,6 +455,11 @@ export default function Chat() {
                   </View>
                 )}
                 {m.image_path && <Photo path={m.image_path} style={{ width: 220, height: 220, borderRadius: radius.md }} />}
+                {isSticker && (
+                  <View style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
+                    <StickerArt sticker={m.sticker!} />
+                  </View>
+                )}
                 {m.audio_path ? (
                   <T color={textColor} style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
                     🎤 Voice note · update Love Birds to listen
@@ -464,7 +493,7 @@ export default function Chat() {
                       accessibilityRole="button"
                       accessibilityLabel={`${snippet(m)}. Double tap to ${m.hearted ? 'remove the heart' : 'send a heart'}. Hold for more.`}
                       style={
-                        look
+                        look || isSticker
                           ? undefined
                           : {
                               backgroundColor: unsent ? 'transparent' : mine ? c.accent : c.surface,
@@ -548,6 +577,11 @@ export default function Chat() {
           </Row>
         )}
         <Row gap={space.sm} style={{ paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: tabBarInset + space.sm, borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.surface }}>
+          {!editing && !text.trim() && (
+            <IconButton label="Send a sticker" onPress={() => setStickers(true)}>
+              <Glyph name="smile" color={c.ink} />
+            </IconButton>
+          )}
           {!editing && (
             <IconButton label="Send a photo" onPress={sendPhoto}>
               <Glyph name="photo" color={c.ink} />
@@ -638,6 +672,7 @@ export default function Chat() {
         )}
       </Sheet>
 
+      <StickerPicker open={stickers} onClose={() => setStickers(false)} onPick={sendSticker} animal={profile.animal} />
       <PhotoViewer photos={viewer?.photos ?? []} start={viewer ? viewer.start : null} onClose={() => setViewer(null)} />
     </SafeAreaView>
   );

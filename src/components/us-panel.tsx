@@ -3,15 +3,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { Garden } from '@/components/garden';
-import { Button, Card, Glyph, Row, T } from '@/components/ui';
+import { Button, Card, Glyph, ProgressBar, Row, T } from '@/components/ui';
+import { tonightKind } from '@/content/tonight';
 import { shortDate } from '@/lib/dates';
+import { ksh, loadFunds, topFund } from '@/lib/funds';
 import { gardenPoints, gardenStage, GROWS, loadGarden, topGrowers, type GardenCounts } from '@/lib/garden';
 import { useRoom } from '@/lib/room';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { challengeSummary, loadBucket, loadChallengeTicks, tickChallenge, untickChallenge, type ChallengeTick, type ChallengeWeek } from '@/lib/together';
 import { radius, space, tabBarInset, useColors } from '@/lib/theme';
-import type { BucketItem } from '@/lib/types';
+import type { BucketItem, Decider, Fund, FundEntry } from '@/lib/types';
 
 function Check({ on, label }: { on: boolean; label: string }) {
   const c = useColors();
@@ -25,7 +27,6 @@ function Check({ on, label }: { on: boolean; label: string }) {
 }
 
 function GardenCard({ counts }: { counts: GardenCounts }) {
-  const c = useColors();
   const ctx = useCouple();
   const [how, setHow] = useState(false);
   const points = gardenPoints(counts);
@@ -43,12 +44,7 @@ function GardenCard({ counts }: { counts: GardenCounts }) {
             {stage.name}
           </T>
         </Row>
-        <View
-          style={{ height: 8, borderRadius: radius.pill, backgroundColor: c.surface2, overflow: 'hidden' }}
-          accessibilityRole="progressbar"
-          accessibilityValue={{ min: 0, max: 100, now: Math.round(stage.progress * 100) }}>
-          <View style={{ width: `${Math.round(stage.progress * 100)}%`, height: '100%', backgroundColor: c.accent, borderRadius: radius.pill }} />
-        </View>
+        <ProgressBar value={stage.progress} height={8} label="Garden growth" />
         <T variant="small" muted>
           {stage.next ? `${stage.toNext} more to grow into ${stage.next.name}.` : 'Fully grown. Keep tending it and it stays this way.'}
         </T>
@@ -205,6 +201,111 @@ function BucketCard({ items }: { items: BucketItem[] }) {
   );
 }
 
+/** A decider from Tonight that wants your swipes, or tonight's match. */
+function TonightCard({ decider, userId, partnerName }: { decider: Decider; userId: string; partnerName: string }) {
+  const c = useColors();
+  const kind = tonightKind(decider.kind);
+  const winner = decider.winner ? decider.options.find((o) => o.key === decider.winner) : null;
+  const theirs = decider.created_by !== userId;
+  if (winner) {
+    return (
+      <Card tone="soft" onPress={() => router.push('/tonight')} accessibilityLabel={`Tonight's sorted: ${winner.label}`}>
+        <Row gap={space.md}>
+          <T style={{ fontSize: 34, lineHeight: 42 }}>{winner.emoji}</T>
+          <View style={{ flex: 1 }}>
+            <T variant="eyebrow">Tonight&apos;s sorted 🎉</T>
+            <T variant="strong" style={{ fontSize: 18 }}>
+              {winner.label}
+            </T>
+          </View>
+          <Glyph name="next" color={c.muted} size={18} />
+        </Row>
+      </Card>
+    );
+  }
+  if (decider.done_by.includes(userId)) return null;
+  const swiped = Object.keys(decider.mine).length;
+  return (
+    <Card tone={theirs ? 'accent' : 'soft'} onPress={() => router.push('/tonight')} accessibilityLabel={`${kind.question} Swipe to decide.`}>
+      <Row gap={space.md}>
+        <T style={{ fontSize: 34, lineHeight: 42 }}>{kind.emoji}</T>
+        <View style={{ flex: 1 }}>
+          <T variant="strong" color={theirs ? c.onAccent : c.ink}>
+            {theirs ? `${partnerName} wants to decide ${kind.title.toLowerCase()} tonight` : kind.question}
+          </T>
+          <T variant="small" color={theirs ? c.onAccent : c.muted}>
+            {swiped ? `You've swiped ${swiped} of ${decider.options.length}. Keep going.` : 'Swipe through the options. The first one you both like wins.'}
+          </T>
+        </View>
+        <Glyph name="next" color={theirs ? c.onAccent : c.muted} size={18} />
+      </Row>
+    </Card>
+  );
+}
+
+function Tile({ emoji, title, sub, badge, onPress }: { emoji: string; title: string; sub: string; badge?: string; onPress: () => void }) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${badge ? `${badge}. ` : ''}${sub}`}
+      style={({ pressed }) => ({
+        flexBasis: '47%',
+        flexGrow: 1,
+        backgroundColor: c.surface,
+        borderColor: c.line,
+        borderWidth: 1,
+        borderRadius: radius.lg,
+        padding: space.md,
+        gap: 2,
+        opacity: pressed ? 0.85 : 1,
+        transform: [{ scale: pressed ? 0.98 : 1 }],
+      })}>
+      <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <T style={{ fontSize: 28, lineHeight: 34 }}>{emoji}</T>
+        {!!badge && (
+          <View style={{ backgroundColor: c.accent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 }}>
+            <T variant="fine" color={c.onAccent} style={{ fontWeight: '700' }}>
+              {badge}
+            </T>
+          </View>
+        )}
+      </Row>
+      <T variant="strong">{title}</T>
+      <T variant="fine" numberOfLines={2}>
+        {sub}
+      </T>
+    </Pressable>
+  );
+}
+
+function FundCard({ fund, total }: { fund: Fund; total: number }) {
+  const c = useColors();
+  const pct = Math.min(100, Math.floor((total * 100) / fund.target));
+  return (
+    <Card onPress={() => router.push('/trip-fund')} accessibilityLabel={`${fund.title}. ${ksh(total)} of ${ksh(fund.target)} saved.`} style={{ gap: space.sm }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <T variant="eyebrow">Trip fund</T>
+        <Glyph name="next" color={c.muted} size={18} />
+      </Row>
+      <Row gap={space.md}>
+        <T style={{ fontSize: 28, lineHeight: 34 }}>{fund.emoji || '✈️'}</T>
+        <T variant="strong" style={{ fontSize: 18, flex: 1 }} numberOfLines={1}>
+          {fund.title}
+        </T>
+        <T variant="strong" accent>
+          {pct}%
+        </T>
+      </Row>
+      <ProgressBar value={total / fund.target} />
+      <T variant="small" muted>
+        {ksh(total)} of {ksh(fund.target)}. {ksh(fund.target - total)} to go.
+      </T>
+    </Card>
+  );
+}
+
 /** The Us tab of Together: your garden, this week's challenge, badges and the bucket list. */
 export function UsPanel() {
   const c = useColors();
@@ -215,6 +316,10 @@ export function UsPanel() {
   const [counts, setCounts] = useState<GardenCounts | null>(null);
   const [ticks, setTicks] = useState<ChallengeTick[]>([]);
   const [bucket, setBucket] = useState<BucketItem[]>([]);
+  const [tonight, setTonight] = useState<Decider | null>(null);
+  const [funds, setFunds] = useState<{ funds: Fund[]; entries: FundEntry[] }>({ funds: [], entries: [] });
+  const [couponsReady, setCouponsReady] = useState(0);
+  const [listOpen, setListOpen] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -226,10 +331,26 @@ export function UsPanel() {
     setBucket(b);
   }, [coupleId]);
 
+  // The newer things. Any of these can fail until extras.sql has run, and then they just stay empty.
+  const loadExtras = useCallback(async () => {
+    if (!coupleId || !userId) return;
+    const [d, f, cp, li] = await Promise.all([
+      supabase.rpc('get_tonight'),
+      loadFunds(coupleId),
+      supabase.from('coupons').select('id', { count: 'exact', head: true }).eq('couple_id', coupleId).neq('from_user', userId).is('redeemed_at', null),
+      supabase.from('list_items').select('id', { count: 'exact', head: true }).eq('couple_id', coupleId).is('done_at', null),
+    ]);
+    setTonight(d.error ? null : ((d.data as Decider | null) ?? null));
+    setFunds(f.error ? { funds: [], entries: [] } : { funds: f.funds, entries: f.entries });
+    setCouponsReady(cp.count ?? 0);
+    setListOpen(li.count ?? 0);
+  }, [coupleId, userId]);
+
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      loadExtras();
+    }, [load, loadExtras]),
   );
 
   useEffect(() => {
@@ -244,10 +365,24 @@ export function UsPanel() {
     };
   }, [coupleId, load]);
 
+  useEffect(() => {
+    if (!coupleId) return;
+    const channel = supabase
+      .channel(`us-extras:${coupleId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deciders', filter: `couple_id=eq.${coupleId}` }, () => loadExtras())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coupons', filter: `couple_id=eq.${coupleId}` }, () => loadExtras())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fund_entries', filter: `couple_id=eq.${coupleId}` }, () => loadExtras())
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [coupleId, loadExtras]);
+
   if (!ctx || !coupleId || !userId) return null;
   const { partner } = ctx;
   const summary = challengeSummary(ticks, coupleId, userId);
   const lastWeekNeedsYou = summary.lastWeekOpen && summary.lastWeek.partner && !summary.lastWeek.mine;
+  const fund = topFund(funds.funds, funds.entries, userId);
 
   async function tick(week: ChallengeWeek) {
     if (!coupleId) return;
@@ -285,6 +420,7 @@ export function UsPanel() {
           </Row>
         </Card>
       )}
+      {tonight && <TonightCard decider={tonight} userId={userId} partnerName={partner.name} />}
       {counts && <GardenCard counts={counts} />}
       <ChallengeCard
         week={summary.thisWeek}
@@ -311,6 +447,20 @@ export function UsPanel() {
         </T>
       )}
       <Badges badges={summary.badges} />
+      <View style={{ gap: space.sm }}>
+        <T variant="eyebrow">More for you two</T>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          <Tile emoji="🍿" title="Tonight" sub="Can't decide? Swipe till you match" onPress={() => router.push('/tonight')} />
+          <Tile emoji="📝" title="Shared lists" sub="Groceries, to-dos and your watchlist" badge={listOpen ? `${listOpen} to do` : undefined} onPress={() => router.push('/lists')} />
+          <Tile emoji="🎁" title="Wishlists" sub={`What you'd love, and what ${partner.name} would`} onPress={() => router.push('/wishlist')} />
+          <Tile emoji="📖" title="Our story" sub="Your firsts and big moments" onPress={() => router.push('/our-story')} />
+          <Tile emoji="🎟️" title="Love coupons" sub="Give a treat. They cash it in when they like" badge={couponsReady ? `${couponsReady} for you` : undefined} onPress={() => router.push('/coupons')} />
+          <Tile emoji="✈️" title="Trip fund" sub="Save up together for a dream" onPress={() => router.push('/trip-fund')} />
+          <Tile emoji="⏳" title="Time capsule" sub="A letter that stays sealed until the day you pick" onPress={() => router.push('/letters')} />
+          <Tile emoji="📊" title="Monthly recap" sub="Your month together, in numbers" onPress={() => router.push('/recap')} />
+        </View>
+      </View>
+      {fund && <FundCard fund={fund.fund} total={fund.total} />}
       <BucketCard items={bucket} />
     </ScrollView>
   );

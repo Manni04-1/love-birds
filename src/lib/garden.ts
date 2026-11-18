@@ -16,6 +16,12 @@ export type GardenCounts = {
   letters: number;
   live: number;
   chat_days: number;
+  /** The rest arrive with extras.sql, so they can be missing until it has run. */
+  tonight?: number;
+  coupons?: number;
+  story?: number;
+  wishes?: number;
+  saved?: number;
   /** You've done something today. */
   today_me: boolean;
   /** Your partner has done something today. */
@@ -31,6 +37,10 @@ export const GROWS: { key: CountKey; points: number; label: string }[] = [
   { key: 'challenges', points: 8, label: 'weekly challenges done together' },
   { key: 'memories', points: 3, label: 'memories saved' },
   { key: 'letters', points: 3, label: 'open-when letters' },
+  { key: 'coupons', points: 3, label: 'love coupons made happen' },
+  { key: 'wishes', points: 3, label: 'wishes granted' },
+  { key: 'tonight', points: 2, label: 'evenings decided together' },
+  { key: 'story', points: 2, label: 'moments added to your story' },
   { key: 'checkins', points: 2, label: 'evening check-ins' },
   { key: 'photos', points: 2, label: 'photos of the day' },
   { key: 'answers', points: 2, label: 'daily questions answered' },
@@ -39,6 +49,7 @@ export const GROWS: { key: CountKey; points: number; label: string }[] = [
   { key: 'games', points: 1, label: 'game answers' },
   { key: 'live', points: 1, label: 'live rounds played' },
   { key: 'chat_days', points: 1, label: 'days you both chatted' },
+  { key: 'saved', points: 1, label: 'savings added to a fund' },
 ];
 
 export const STAGES: { min: number; name: string }[] = [
