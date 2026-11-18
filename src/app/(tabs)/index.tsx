@@ -12,12 +12,13 @@ import { Avatar, Button, Card, DateField, Glyph, Row, T } from '@/components/ui'
 import { gestureFor } from '@/content/gestures';
 import { saveMood, useCheckins, useDailyPhotos, useGestureDone, useMoods, useNudges } from '@/lib/daily';
 import { dayLabel, dayNumber, daysBetween, greeting, longDate, parseISODate, shortDate, timeLabel, toISODate, today } from '@/lib/dates';
+import { dayOf, isRepeat, loadUpcoming, rangeLabel, repeatLabel, type Occurrence } from '@/lib/plans';
 import { useQuestions } from '@/lib/questions';
 import { monthKey, shiftMonth } from '@/lib/recap';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { radius, space, tabBarInset, useColors, useThemeName } from '@/lib/theme';
-import type { Memory, Plan } from '@/lib/types';
+import type { Memory } from '@/lib/types';
 
 /** A heart that beats between your two initials. */
 function Heartbeat({ color }: { color: string }) {
@@ -50,11 +51,20 @@ function recapMonth(): Date | null {
   return t.getDate() <= 7 ? shiftMonth(t, -1) : null;
 }
 
-function countdown(day: string): string {
-  const n = daysBetween(today(), parseISODate(day));
-  if (n <= 0) return 'Today';
+function countdown(o: Occurrence): string {
+  const n = daysBetween(today(), parseISODate(o.start));
+  if (n < 0) return 'On now';
+  if (n === 0) return 'Today';
   if (n === 1) return 'Tomorrow';
   return `In ${n} days`;
+}
+
+/** "Tomorrow · 8:00 PM", or for a trip "Sat 21 Nov to Mon 23 Nov", or "Day 2 of 3 · …" once it's begun. */
+function whenLabel(o: Occurrence): string {
+  if (o.end === o.start) return `${dayLabel(o.start)} · ${timeLabel(o.plan.time)}`;
+  const now = toISODate(today());
+  if (o.start < now) return `${dayOf(o, now)} · ${rangeLabel(o)}`;
+  return o.plan.time ? `${rangeLabel(o)} · ${timeLabel(o.plan.time)}` : rangeLabel(o);
 }
 
 export default function Home() {
@@ -73,7 +83,7 @@ export default function Home() {
   const nudges = useNudges(coupleId, userId, () => setPing((p) => p + 1));
   const gesture = useGestureDone();
   const [moodOpen, setMoodOpen] = useState(false);
-  const [next, setNext] = useState<Plan | null>(null);
+  const [next, setNext] = useState<Occurrence | null>(null);
   const [latest, setLatest] = useState<Memory | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [since, setSince] = useState<string | null>(null);
@@ -85,7 +95,7 @@ export default function Home() {
   const load = useCallback(async () => {
     if (!coupleId) return;
     const [plans, mems] = await Promise.all([
-      supabase.from('events').select('*').eq('couple_id', coupleId).gte('day', toISODate(today())).order('day').order('time', { nullsFirst: true }).limit(1),
+      loadUpcoming(coupleId, toISODate(today()), 1),
       supabase.from('memories').select('*').eq('couple_id', coupleId).order('happened_on', { ascending: false }).order('created_at', { ascending: false }).limit(1),
       reloadQuestions(),
       reloadCheckins(),
@@ -93,7 +103,7 @@ export default function Home() {
       reloadMoods(),
       reloadNudges(),
     ]);
-    setNext((plans.data?.[0] as Plan | undefined) ?? null);
+    setNext(plans[0] ?? null);
     setLatest((mems.data?.[0] as Memory | undefined) ?? null);
   }, [coupleId, reloadQuestions, reloadCheckins, reloadPhotos, reloadMoods, reloadNudges]);
 
@@ -296,20 +306,27 @@ export default function Home() {
           Coming up
         </T>
         {next ? (
-          <Card onPress={() => router.push({ pathname: '/calendar', params: { day: next.day } })} accessibilityLabel={`Next up: ${next.title}, ${countdown(next.day)}`}>
+          <Card
+            onPress={() => router.push({ pathname: '/calendar', params: { day: next.start < toISODate(today()) ? toISODate(today()) : next.start } })}
+            accessibilityLabel={`Next up: ${next.plan.title}, ${countdown(next)}`}>
             <Row gap={space.lg}>
               <View style={{ width: 62, height: 62, borderRadius: radius.sm, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
                 <T variant="title" style={{ fontSize: 24, color: c.accent, lineHeight: 28 }}>
-                  {parseISODate(next.day).getDate()}
+                  {parseISODate(next.start).getDate()}
                 </T>
-                <T variant="eyebrow">{parseISODate(next.day).toLocaleDateString('en-GB', { month: 'short' })}</T>
+                <T variant="eyebrow">{parseISODate(next.start).toLocaleDateString('en-GB', { month: 'short' })}</T>
               </View>
               <View style={{ flex: 1, gap: 2 }}>
-                <T variant="eyebrow">{countdown(next.day)}</T>
-                <T variant="strong">{next.title}</T>
+                <T variant="eyebrow">{countdown(next)}</T>
+                <T variant="strong">{next.plan.title}</T>
                 <T variant="small" muted>
-                  {dayLabel(next.day)} · {timeLabel(next.time)}
+                  {whenLabel(next)}
                 </T>
+                {isRepeat(next.plan.repeats) && (
+                  <T variant="small" muted>
+                    🔁 {repeatLabel(next.plan)}
+                  </T>
+                )}
               </View>
             </Row>
           </Card>

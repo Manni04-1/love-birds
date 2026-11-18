@@ -45,6 +45,14 @@ export type Plan = {
   remind: boolean;
   created_by: string;
   created_at: string;
+  /** The last day of a plan that lasts several days. Missing until calendar.sql has run. */
+  end_day?: string | null;
+  /** daily, weekly, fortnightly, monthly or yearly. */
+  repeats?: string | null;
+  /** The last day a repeating plan can start. */
+  repeat_until?: string | null;
+  /** Start days of times that were skipped. */
+  skip_days?: string[] | null;
 };
 
 export type Message = {

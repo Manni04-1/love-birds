@@ -1,15 +1,16 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, useColorScheme, View } from 'react-native';
+import { Pressable, ScrollView, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Hero, heroInk } from '@/components/hero';
 import { Photo } from '@/components/photo';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
-import { Avatar, Button, Empty, Glyph, IconButton, Row, T } from '@/components/ui';
+import { Avatar, Button, Empty, ErrorText, Glyph, IconButton, Row, Sheet, T } from '@/components/ui';
 import { addDays, dayLabel, daysBetween, monthLabel, parseISODate, timeLabel, toISODate, today } from '@/lib/dates';
 import { hashRank } from '@/lib/games';
 import { hasMoments, ideaFor, loadFreeDays, loadMoments, setFree, type DayMoments, type FreeDay, type IdeaPick } from '@/lib/our-days';
+import { dayOf, isRepeat, loadPlans, loadUpcoming, plansByDay, rangeLabel, repeatLabel, type Occurrence } from '@/lib/plans';
 import { loadQuestions } from '@/lib/questions';
 import { useCouple } from '@/lib/session';
 import { specialDays, type SpecialDay } from '@/lib/special-days';
@@ -20,7 +21,7 @@ import type { Plan, Question } from '@/lib/types';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-type Next = { day: string; title: string; emoji: string; kind: 'plan' | 'special' };
+type Next = { day: string; title: string; emoji: string; kind: 'plan' | 'special'; end?: string };
 
 /** A big countdown to whatever's next: a plan, an anniversary, a birthday or a milestone. */
 function Countdown({ next, onPress }: { next: Next | null; onPress: () => void }) {
@@ -28,6 +29,8 @@ function Countdown({ next, onPress }: { next: Next | null; onPress: () => void }
   const dark = useColorScheme() === 'dark';
   const ink = heroInk(theme, dark);
   const n = next ? daysBetween(today(), parseISODate(next.day)) : 0;
+  // A trip that has already started and hasn't ended yet.
+  const ongoing = !!next?.end && n < 0;
   const shadow = { textShadowColor: ink.shadow, textShadowRadius: 8 };
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={next ? `${next.title}, ${n === 0 ? 'today' : `in ${n} days`}` : 'Add a plan'}>
@@ -42,7 +45,7 @@ function Countdown({ next, onPress }: { next: Next | null; onPress: () => void }
             </T>
             {next ? (
               <T variant="small" color={ink.soft} style={shadow}>
-                {dayLabel(next.day)}
+                {next.end ? rangeLabel({ start: next.day, end: next.end }) : dayLabel(next.day)}
               </T>
             ) : null}
           </View>
@@ -50,7 +53,7 @@ function Countdown({ next, onPress }: { next: Next | null; onPress: () => void }
             <View style={{ alignItems: 'center', minWidth: 76 }}>
               {n <= 0 ? (
                 <T variant="title" color={ink.ink} style={shadow}>
-                  Today!
+                  {ongoing ? 'On now' : 'Today!'}
                 </T>
               ) : (
                 <>
@@ -179,6 +182,13 @@ function OurDay({ day, m, partnerName, question, onOpenPhoto }: { day: string; m
   );
 }
 
+/** "Skip just tomorrow", "Skip just on Fri 27 Nov", or for a plan over several days "Skip just this time". */
+function skipTitle(o: Occurrence): string {
+  if (o.end > o.start) return 'Skip just this time';
+  const when = dayLabel(o.start);
+  return ['Today', 'Tomorrow', 'Yesterday'].includes(when) ? `Skip just ${when.toLowerCase()}` : `Skip just on ${when}`;
+}
+
 export default function Calendar() {
   const c = useColors();
   const ctx = useCouple();
@@ -188,7 +198,12 @@ export default function Calendar() {
   const [selected, setSelected] = useState(toISODate(today()));
   const [month, setMonth] = useState(() => new Date(today().getFullYear(), today().getMonth(), 1));
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [upcoming, setUpcoming] = useState<Plan[]>([]);
+  const [upcoming, setUpcoming] = useState<Occurrence[]>([]);
+  // The plan you tapped, with what to do with it.
+  const [open, setOpen] = useState<{ o: Occurrence; day: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [planError, setPlanError] = useState('');
   const [moments, setMoments] = useState<Map<string, DayMoments>>(new Map());
   const [free, setFreeDays] = useState<FreeDay[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -211,14 +226,14 @@ export default function Calendar() {
   const load = useCallback(async () => {
     if (!coupleId || !userId) return;
     const [inMonth, next, m, f, q] = await Promise.all([
-      supabase.from('events').select('*').eq('couple_id', coupleId).gte('day', first).lte('day', last).order('day').order('time', { nullsFirst: true }),
-      supabase.from('events').select('*').eq('couple_id', coupleId).gte('day', toISODate(today())).order('day').order('time', { nullsFirst: true }).limit(5),
+      loadPlans(coupleId, first, last),
+      loadUpcoming(coupleId, toISODate(today()), 5),
       loadMoments(coupleId, userId, first, last),
       loadFreeDays(coupleId, first, last),
       loadQuestions(),
     ]);
-    setPlans((inMonth.data ?? []) as Plan[]);
-    setUpcoming((next.data ?? []) as Plan[]);
+    setPlans(inMonth ?? []);
+    setUpcoming(next);
     setMoments(m);
     setFreeDays(f);
     setQuestions(q);
@@ -258,7 +273,7 @@ export default function Calendar() {
     [together, myBirthday, partnerBirthday, partnerName, story],
   );
 
-  const daysWithPlans = useMemo(() => new Set(plans.map((p) => p.day)), [plans]);
+  const byDay = useMemo(() => plansByDay(plans, first, last), [plans, first, last]);
   const specialByDay = useMemo(() => {
     const m = new Map<string, SpecialDay[]>();
     for (const s of specials) m.set(s.day, [...(m.get(s.day) ?? []), s]);
@@ -294,7 +309,7 @@ export default function Calendar() {
   const cells: (string | null)[] = [...Array(lead).fill(null), ...Array.from({ length: daysIn }, (_, i) => toISODate(new Date(month.getFullYear(), month.getMonth(), i + 1)))];
   while (cells.length % 7) cells.push(null);
   const todayIso = toISODate(today());
-  const selectedPlans = plans.filter((p) => p.day === selected);
+  const selectedPlans = byDay.get(selected) ?? [];
   const selectedSpecial = specialByDay.get(selected) ?? [];
   const selectedFree = freeByDay.get(selected) ?? { me: false, them: false };
   const selectedQuestion = (() => {
@@ -302,9 +317,12 @@ export default function Calendar() {
     return questions.find((q) => q.id === qid) ?? null;
   })();
 
-  const nextPlan: Next | null = upcoming[0] ? { day: upcoming[0].day, title: upcoming[0].title, emoji: '📅', kind: 'plan' } : null;
+  const soonest = upcoming[0];
+  const nextPlan: Next | null = soonest
+    ? { day: soonest.start, title: soonest.plan.title, emoji: soonest.end > soonest.start ? '🧳' : '📅', kind: 'plan', end: soonest.end > soonest.start ? soonest.end : undefined }
+    : null;
   const nextSpecial: Next | null = soonSpecial ? { day: soonSpecial.day, title: soonSpecial.title, emoji: soonSpecial.emoji, kind: 'special' } : null;
-  const next = nextPlan && nextSpecial ? (nextSpecial.day < nextPlan.day ? nextSpecial : nextPlan) : (nextPlan ?? nextSpecial);
+  const next = nextPlan && nextSpecial ? (nextSpecial.day < nextPlan.day && !nextPlan.end ? nextSpecial : nextPlan) : (nextPlan ?? nextSpecial);
 
   function jump(day: string) {
     setSelected(day);
@@ -324,40 +342,77 @@ export default function Calendar() {
     }
   }
 
-  function confirmDelete(p: Plan) {
-    Alert.alert('Delete this plan?', `"${p.title}" will disappear for both of you.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.from('events').delete().eq('id', p.id);
-          load();
-        },
-      },
-    ]);
+  function openPlan(o: Occurrence, day: string) {
+    setPlanError('');
+    setConfirmDelete(false);
+    setOpen({ o, day });
   }
 
-  const planRow = (p: Plan, showDay: boolean) => (
-    <Pressable
-      key={p.id}
-      onLongPress={() => confirmDelete(p)}
-      onPress={showDay ? () => jump(p.day) : undefined}
-      accessibilityHint="Long press to delete"
-      style={{ flexDirection: 'row', gap: space.md, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.md, padding: space.md }}>
-      <View style={{ width: 78 }}>
-        {showDay && <T variant="small" accent style={{ fontWeight: '700' }}>{dayLabel(p.day)}</T>}
-        <T variant="small" accent style={{ fontWeight: '700' }}>
-          {timeLabel(p.time)}
-        </T>
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <T variant="strong">{p.title}</T>
-        {p.note ? <T variant="small" muted>{p.note}</T> : null}
-        <T variant="fine">{p.created_by === userId ? 'Added by you' : `Added by ${partner.name}`}</T>
-      </View>
-    </Pressable>
-  );
+  async function skipOnce(o: Occurrence) {
+    setBusy(true);
+    setPlanError('');
+    const { error } = await supabase
+      .from('events')
+      .update({ skip_days: [...(o.plan.skip_days ?? []), o.start] })
+      .eq('id', o.plan.id);
+    setBusy(false);
+    if (error) return setPlanError(friendlyError(error));
+    setOpen(null);
+    load();
+  }
+
+  async function deletePlan(p: Plan) {
+    setBusy(true);
+    setPlanError('');
+    const { error } = await supabase.from('events').delete().eq('id', p.id);
+    setBusy(false);
+    if (error) return setPlanError(friendlyError(error));
+    setOpen(null);
+    load();
+  }
+
+  const planRow = (o: Occurrence, day: string | null) => {
+    const p = o.plan;
+    const several = o.end > o.start;
+    const ongoing = !day && o.start < todayIso;
+    // On a later day of a trip, the start time doesn't apply.
+    const time = day && day !== o.start ? 'All day' : timeLabel(p.time);
+    return (
+      <Pressable
+        key={`${p.id}-${o.start}`}
+        onPress={() => openPlan(o, day ?? (ongoing ? todayIso : o.start))}
+        onLongPress={() => openPlan(o, day ?? (ongoing ? todayIso : o.start))}
+        accessibilityRole="button"
+        accessibilityHint="Opens it to change, skip or delete"
+        style={({ pressed }) => ({ flexDirection: 'row', gap: space.md, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.md, padding: space.md, opacity: pressed ? 0.85 : 1 })}>
+        <View style={{ width: 78 }}>
+          {!day && (
+            <T variant="small" accent style={{ fontWeight: '700' }}>
+              {ongoing ? 'On now' : dayLabel(o.start)}
+            </T>
+          )}
+          <T variant="small" accent style={{ fontWeight: '700' }}>
+            {time}
+          </T>
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <T variant="strong">{p.title}</T>
+          {several && (
+            <T variant="small" accent style={{ fontWeight: '700' }}>
+              {day ? `${dayOf(o, day)} · ${rangeLabel(o)}` : rangeLabel(o)}
+            </T>
+          )}
+          {isRepeat(p.repeats) && (
+            <T variant="small" muted>
+              🔁 {repeatLabel(p)}
+            </T>
+          )}
+          {p.note ? <T variant="small" muted>{p.note}</T> : null}
+          <T variant="fine">{p.created_by === userId ? 'Added by you' : `Added by ${partner.name}`}</T>
+        </View>
+      </Pressable>
+    );
+  };
 
   const future = selected >= todayIso;
   const pick = idea?.day === selected ? idea.pick : null;
@@ -398,7 +453,12 @@ export default function Calendar() {
               if (!iso) return <View key={`blank-${i}`} style={{ width: `${100 / 7}%`, aspectRatio: 1 }} />;
               const isSel = iso === selected;
               const isToday = iso === todayIso;
-              const has = daysWithPlans.has(iso);
+              const onDay = byDay.get(iso) ?? [];
+              const has = onDay.length > 0;
+              const single = onDay.some((o) => o.end === o.start);
+              const trips = onDay.filter((o) => o.end > o.start);
+              const tripStart = trips.some((o) => o.start === iso);
+              const tripEnd = trips.some((o) => o.end === iso);
               const shared = hasMoments(moments.get(iso));
               const special = specialByDay.get(iso)?.[0];
               const f = freeByDay.get(iso);
@@ -420,6 +480,24 @@ export default function Calendar() {
                   accessibilityState={{ selected: isSel }}
                   accessibilityLabel={label}
                   style={{ width: `${100 / 7}%`, aspectRatio: 1, padding: 2 }}>
+                  {trips.length > 0 && (
+                    // A bar that runs across every day of a trip.
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: 5,
+                        left: tripStart ? 9 : 0,
+                        right: tripEnd ? 9 : 0,
+                        height: 5,
+                        backgroundColor: c.accent,
+                        opacity: isSel ? 0 : 0.85,
+                        borderTopLeftRadius: tripStart ? 3 : 0,
+                        borderBottomLeftRadius: tripStart ? 3 : 0,
+                        borderTopRightRadius: tripEnd ? 3 : 0,
+                        borderBottomRightRadius: tripEnd ? 3 : 0,
+                      }}
+                    />
+                  )}
                   <View
                     style={{
                       flex: 1,
@@ -440,7 +518,7 @@ export default function Calendar() {
                       {parseISODate(iso).getDate()}
                     </T>
                     <Row gap={3}>
-                      <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: has ? (isSel ? c.onAccent : c.accent) : 'transparent' }} />
+                      <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: single || (isSel && has) ? (isSel ? c.onAccent : c.accent) : 'transparent' }} />
                       {shared && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: isSel ? c.onAccent : c.accent2 }} />}
                     </Row>
                   </View>
@@ -452,6 +530,10 @@ export default function Calendar() {
             <Row gap={4}>
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent }} />
               <T variant="fine">Plans</T>
+            </Row>
+            <Row gap={4}>
+              <View style={{ width: 14, height: 5, borderRadius: 3, backgroundColor: c.accent }} />
+              <T variant="fine">Several days</T>
             </Row>
             <Row gap={4}>
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent2 }} />
@@ -518,7 +600,7 @@ export default function Calendar() {
           </View>
         )}
 
-        {selectedPlans.length ? selectedPlans.map((p) => planRow(p, false)) : future ? <Empty>Nothing planned. Tap + to add something for you both.</Empty> : null}
+        {selectedPlans.length ? selectedPlans.map((o) => planRow(o, selected)) : future ? <Empty>Nothing planned. Tap + to add something for you both.</Empty> : null}
 
         {!future || selected === todayIso ? (
           <>
@@ -532,9 +614,53 @@ export default function Calendar() {
         <T variant="strong" style={{ marginTop: space.sm }}>
           Coming up
         </T>
-        {upcoming.length ? upcoming.map((p) => planRow(p, true)) : <Empty>No plans ahead yet.</Empty>}
-        <T variant="fine">Long press a plan to delete it.</T>
+        {upcoming.length ? upcoming.map((o) => planRow(o, null)) : <Empty>No plans ahead yet.</Empty>}
+        <T variant="fine">Tap a plan to change it, skip it once, or delete it.</T>
       </ScrollView>
+      <Sheet open={!!open} onClose={() => setOpen(null)}>
+        {open && !confirmDelete && (
+          <>
+            <View style={{ gap: 4 }}>
+              <T variant="heading">{open.o.plan.title}</T>
+              <T variant="small" accent style={{ fontWeight: '700' }}>
+                {open.o.end > open.o.start ? `${rangeLabel(open.o)} · ${dayOf(open.o, open.day)}` : dayLabel(open.o.start)}
+                {/* On a later day of a trip, the start time doesn't apply. */}
+                {open.o.plan.time && open.day === open.o.start ? ` · ${timeLabel(open.o.plan.time)}` : ''}
+              </T>
+              {isRepeat(open.o.plan.repeats) && <T variant="small" muted>🔁 {repeatLabel(open.o.plan)}</T>}
+              {open.o.plan.note ? <T variant="small">{open.o.plan.note}</T> : null}
+            </View>
+            <ErrorText>{planError}</ErrorText>
+            <Button
+              title="Change"
+              variant="outline"
+              icon={<Glyph name="edit" color={c.ink} size={18} />}
+              onPress={() => {
+                const id = open.o.plan.id;
+                setOpen(null);
+                router.push({ pathname: '/new-plan', params: { id } });
+              }}
+            />
+            {isRepeat(open.o.plan.repeats) && (
+              <Button title={skipTitle(open.o)} variant="outline" loading={busy} onPress={() => skipOnce(open.o)} />
+            )}
+            <Button title={isRepeat(open.o.plan.repeats) ? 'Delete every time' : 'Delete'} variant="ghost" onPress={() => setConfirmDelete(true)} />
+          </>
+        )}
+        {open && confirmDelete && (
+          <>
+            <T variant="heading">Delete “{open.o.plan.title}”?</T>
+            <T variant="small" muted>
+              {isRepeat(open.o.plan.repeats) ? 'Every time it comes round goes, for both of you.' : 'It disappears for both of you.'}
+            </T>
+            <ErrorText>{planError}</ErrorText>
+            <Row>
+              <Button style={{ flex: 1 }} title="Keep it" variant="outline" onPress={() => setConfirmDelete(false)} />
+              <Button style={{ flex: 1 }} title="Delete" variant="danger" loading={busy} onPress={() => deletePlan(open.o.plan)} />
+            </Row>
+          </>
+        )}
+      </Sheet>
       <PhotoViewer photos={viewer?.photos ?? []} start={viewer ? viewer.start : null} onClose={() => setViewer(null)} />
     </SafeAreaView>
   );
