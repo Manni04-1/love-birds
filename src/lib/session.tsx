@@ -1,6 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { clearWidgets } from '@/widgets/sync';
+
 import { clearLock } from './lock';
 import { forgetThisPhone } from './notifications';
 import { supabase } from './supabase';
@@ -81,6 +83,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // The lock belongs to the account on this phone, so the next person to sign in starts without it.
     await clearLock().catch(() => {});
     await supabase.auth.signOut();
+    // Home-screen widgets stop showing your names and plans.
+    await clearWidgets().catch(() => {});
   }, [userId]);
 
   const value = useMemo(

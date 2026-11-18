@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useUpdates } from 'expo-updates';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Switch, Text, useColorScheme, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, ScrollView, Switch, Text, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
@@ -18,6 +18,14 @@ import type { BubbleStyle } from '@/lib/types';
 import { ANIMALS } from '@/content/animals';
 import { FONTS, fontFor, radius, space, THEMES, useColors, useFontName, useThemeName, type FontName, type ThemeName } from '@/lib/theme';
 import { downloadUpdate, restartIntoUpdate, updatesEnabled, versionLabel } from '@/lib/updates';
+import type { WidgetName } from '@/widgets/data';
+import { pinWidget } from '@/widgets/sync';
+
+const WIDGET_CHOICES: { name: WidgetName; label: string; size: string; badge: string; blurb: (partner: string) => string }[] = [
+  { name: 'Together', label: 'Love Birds', size: '4 × 2', badge: '💕', blurb: (p) => `Your days together, how ${p} feels and what's next` },
+  { name: 'Countdown', label: 'Countdown', size: '2 × 2', badge: '📅', blurb: () => 'Days to go until your next plan' },
+  { name: 'ThinkingOfYou', label: 'Thinking of you', size: '2 × 1', badge: '💭', blurb: (p) => `One tap tells ${p} you're thinking of them` },
+];
 
 function Group({ label, children }: { label: string; children: ReactNode }) {
   const c = useColors();
@@ -149,6 +157,7 @@ export default function Settings() {
   const font = useFontName();
   const [nickname, setNickname] = useState(ctx?.profile.partner_nickname ?? '');
   const [privateOn, setPrivateOn] = useState(!!ctx?.profile.private_notifications);
+  const [widgetNote, setWidgetNote] = useState('');
   const userId = ctx?.userId;
   const refreshCouple = ctx?.refresh;
 
@@ -238,6 +247,16 @@ export default function Settings() {
     setNotifNote('');
     if (notif === 'blocked') return Linking.openSettings();
     setNotif(await enableNotifications(profile.id, true));
+  }
+
+  async function addWidget(name: WidgetName) {
+    setWidgetNote('');
+    const asked = await pinWidget(name);
+    setWidgetNote(
+      asked
+        ? 'Your phone will ask where to put it.'
+        : 'Your home screen can\'t add it from here. Touch and hold an empty spot on your home screen, tap Widgets, then find Love Birds.',
+    );
   }
 
   async function sendTest() {
@@ -472,6 +491,39 @@ export default function Settings() {
           </Row>
         </Group>
 
+        {Platform.OS !== 'ios' && (
+          <Group label="Home-screen widgets">
+            <T variant="small" muted>
+              See each other from your home screen. Widgets update every half hour and each time you leave the app.
+            </T>
+            {WIDGET_CHOICES.map((w) => (
+              <Row key={w.name}>
+                <View style={{ width: 44, height: 44, borderRadius: radius.md, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 22 }}>{w.badge}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <T variant="strong">
+                    {w.label}{' '}
+                    <T variant="small" muted>
+                      {w.size}
+                    </T>
+                  </T>
+                  <T variant="small" muted>
+                    {w.blurb(partner.name)}
+                  </T>
+                </View>
+                <Button title="Add" variant="outline" onPress={() => addWidget(w.name)} />
+              </Row>
+            ))}
+            {widgetNote ? <T variant="small">{widgetNote}</T> : null}
+            {privateOn ? (
+              <T variant="small" muted>
+                Private notifications are on, so widgets leave out plan names and the word {partner.name} picks for their mood.
+              </T>
+            ) : null}
+          </Group>
+        )}
+
         {lockSupported && (
           <Group label="App lock">
             <Row style={{ justifyContent: 'space-between' }}>
@@ -532,7 +584,7 @@ export default function Settings() {
 
         <Group label="Privacy">
           <T variant="small">
-            Only you and {partner.name} can see your calendar, chat, memories and answers. Photos are stored privately and open only inside the app.
+            Only you and {partner.name} can see your calendar, chat, memories and answers. Photos are stored privately and open only inside the app, unless you save one to your phone.
           </T>
         </Group>
 

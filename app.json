@@ -3,7 +3,7 @@
     "name": "Love Birds",
     "slug": "love-birds",
     "owner": "manni04-1",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lovebirds",
@@ -52,7 +52,7 @@
         {
           "photosPermission": "Love Birds uses your photos so you can share them with your partner.",
           "cameraPermission": "Love Birds uses your camera so you can take a photo of the day for your partner.",
-          "microphonePermission": false
+          "microphonePermission": "Love Birds uses your microphone so you can send voice notes to your partner."
         }
       ],
       [
@@ -71,6 +71,78 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Love Birds uses Face ID to unlock the app."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Love Birds uses your microphone so you can send voice notes to your partner.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Love Birds saves the photos you choose to your phone.",
+          "savePhotosPermission": "Love Birds saves the photos you choose to your phone.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/bricolage-grotesque/800ExtraBold/BricolageGrotesque_800ExtraBold.ttf",
+            "./node_modules/@expo-google-fonts/nunito-sans/700Bold/NunitoSans_700Bold.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "Together",
+              "label": "Love Birds",
+              "description": "Your days together, how your partner feels and what is next",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "600dp",
+              "maxResizeHeight": "300dp",
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/widgets/together.png",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Countdown",
+              "label": "Countdown",
+              "description": "Days to go until your next plan",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "400dp",
+              "maxResizeHeight": "400dp",
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/widgets/countdown.png",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "ThinkingOfYou",
+              "label": "Thinking of you",
+              "description": "Tap the heart to tell your partner you are thinking of them",
+              "minWidth": "110dp",
+              "minHeight": "50dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 1,
+              "maxResizeWidth": "400dp",
+              "maxResizeHeight": "200dp",
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/widgets/thinking-of-you.png",
+              "updatePeriodMillis": 1800000
+            }
+          ]
         }
       ]
     ],

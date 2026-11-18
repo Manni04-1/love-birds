@@ -1,3 +1,4 @@
+import { requestRecordingPermissionsAsync } from 'expo-audio';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
@@ -9,8 +10,10 @@ import { Photo } from '@/components/photo';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
 import { StickerArt, StickerPicker } from '@/components/sticker';
 import { Avatar, Button, DateField, Glyph, IconButton, Row, Sheet, T } from '@/components/ui';
+import { useVoicePlayback, VoiceNote, VoiceRecorder } from '@/components/voice';
 import { parseSticker } from '@/content/stickers';
 import { addDays, clockLabel, dayLabel, toISODate, today } from '@/lib/dates';
+import { whileAway } from '@/lib/lock';
 import { setChatOpen } from '@/lib/notifications';
 import { pickPhoto, uploadPhoto } from '@/lib/photos';
 import { useRoom } from '@/lib/room';
@@ -18,6 +21,7 @@ import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { radius, space, tabBarInset, useColors } from '@/lib/theme';
 import type { Message, Reaction } from '@/lib/types';
+import { deleteRecording, durationLabel, uploadVoiceNote } from '@/lib/voice';
 
 const REACTIONS = ['❤️', '😂', '😍', '🥺', '😮', '🔥', '👍'];
 const EDIT_WINDOW = 15 * 60 * 1000;
@@ -34,7 +38,7 @@ const snippet = (m: Message | undefined) => {
   if (m.body) return m.body;
   const sticker = parseSticker(m.sticker);
   if (sticker) return `${sticker.emoji} Sticker: ${sticker.text}`;
-  return m.audio_path ? '🎤 Voice note' : '📷 Photo';
+  return m.audio_path ? `🎤 Voice note${m.audio_ms ? ` · ${durationLabel(m.audio_ms)}` : ''}` : '📷 Photo';
 };
 
 function sortMessages(list: Message[]) {
@@ -131,11 +135,14 @@ export default function Chat() {
   const [pickTime, setPickTime] = useState<string | null>(null);
   const [viewer, setViewer] = useState<{ photos: ViewerPhoto[]; start: number } | null>(null);
   const [stickers, setStickers] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [sealed, setSealed] = useState(0);
   const [, setTick] = useState(0);
   const focused = useRef(false);
   const lastTap = useRef<{ id: string; at: number; timer: ReturnType<typeof setTimeout> | null }>({ id: '', at: 0, timer: null });
   const input = useRef<ComponentRef<typeof TextInput>>(null);
+  const voice = useVoicePlayback();
+  const { current: playingId, loading: loadingId, failed: failedId, pause: pauseVoice } = voice;
 
   const markRead = useCallback(async () => {
     if (!coupleId || !userId) return;
@@ -167,8 +174,9 @@ export default function Chat() {
         focused.current = false;
         setChatOpen(false);
         clearInterval(t);
+        pauseVoice();
       };
-    }, [load, markRead]),
+    }, [load, markRead, pauseVoice]),
   );
 
   // Live updates: new messages, hearts, edits, read receipts, scheduled messages arriving, and reactions.
@@ -208,6 +216,8 @@ export default function Chat() {
   }, [coupleId, userId, markRead]);
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  // Redraws the messages when reactions change or a voice note starts or stops loading.
+  const listExtra = useMemo(() => ({ reactions, playingId, loadingId, failedId }), [reactions, playingId, loadingId, failedId]);
   const photos = useMemo<ViewerPhoto[]>(
     () =>
       messages
@@ -262,6 +272,42 @@ export default function Chat() {
     if (err) return setError(friendlyError(err));
     setReplyTo(null);
     setMessages((prev) => sortMessages(prev.some((x) => x.id === data.id) ? prev : [data as Message, ...prev]));
+  }
+
+  async function startVoice() {
+    setError('');
+    const perm = await whileAway(() => requestRecordingPermissionsAsync()).catch(() => null);
+    if (!perm?.granted) {
+      return setError(
+        perm && !perm.canAskAgain
+          ? 'The microphone is off for Love Birds. Turn it on in your phone\'s settings to send voice notes.'
+          : 'Allow the microphone to record a voice note.',
+      );
+    }
+    voice.pause();
+    room.stopTyping();
+    setRecording(true);
+  }
+
+  async function sendVoice(uri: string, ms: number): Promise<boolean> {
+    setError('');
+    try {
+      const path = await uploadVoiceNote(couple.id, uri);
+      const { data, error: err } = await supabase
+        .from('messages')
+        .insert({ couple_id: couple.id, audio_path: path, audio_ms: Math.round(ms), reply_to: replyTo?.id ?? null })
+        .select()
+        .single();
+      if (err) throw err;
+      deleteRecording(uri);
+      setReplyTo(null);
+      setRecording(false);
+      setMessages((prev) => sortMessages(prev.some((x) => x.id === data.id) ? prev : [data as Message, ...prev]));
+      return true;
+    } catch (e) {
+      setError(friendlyError(e));
+      return false;
+    }
   }
 
   async function sendPhoto() {
@@ -326,6 +372,7 @@ export default function Chat() {
 
   async function unsend(m: Message) {
     setMenu(null);
+    if (voice.current === m.id) voice.pause();
     const { error: err } = await supabase.rpc('unsend_message', { p_id: m.id });
     if (err) return setError(friendlyError(err));
     if (waiting(m)) setMessages((prev) => prev.filter((x) => x.id !== m.id));
@@ -418,7 +465,7 @@ export default function Chat() {
           keyExtractor={(m) => m.id}
           contentContainerStyle={{ padding: space.lg, gap: 6 }}
           keyboardShouldPersistTaps="handled"
-          extraData={reactions}
+          extraData={listExtra}
           ListFooterComponent={
             <T variant="fine" style={{ textAlign: 'center', marginBottom: space.md }}>
               Double tap a message to send a heart. Hold it for more. Swipe right to reply.
@@ -460,11 +507,7 @@ export default function Chat() {
                     <StickerArt sticker={m.sticker!} />
                   </View>
                 )}
-                {m.audio_path ? (
-                  <T color={textColor} style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
-                    🎤 Voice note · update Love Birds to listen
-                  </T>
-                ) : null}
+                {m.audio_path ? <VoiceNote voice={voice} id={m.id} path={m.audio_path} ms={m.audio_ms} ink={textColor} fine={fineColor} /> : null}
                 {m.body ? (
                   <T color={textColor} style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
                     {m.body}
@@ -576,40 +619,56 @@ export default function Chat() {
             </IconButton>
           </Row>
         )}
-        <Row gap={space.sm} style={{ paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: tabBarInset + space.sm, borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.surface }}>
-          {!editing && !text.trim() && (
-            <IconButton label="Send a sticker" onPress={() => setStickers(true)}>
-              <Glyph name="smile" color={c.ink} />
-            </IconButton>
-          )}
-          {!editing && (
-            <IconButton label="Send a photo" onPress={sendPhoto}>
-              <Glyph name="photo" color={c.ink} />
-            </IconButton>
-          )}
-          <TextInput
-            ref={input}
-            value={text}
-            onChangeText={(t) => {
-              setText(t);
-              if (t.trim()) room.typing();
+        {recording ? (
+          <VoiceRecorder
+            onSend={sendVoice}
+            onClose={(note) => {
+              setRecording(false);
+              if (note) setError(note);
             }}
-            placeholder={editing ? 'Change your message' : 'Message'}
-            placeholderTextColor={c.muted}
-            accessibilityLabel="Message"
-            multiline
-            maxLength={4000}
-            style={{ flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1.5, borderColor: c.line, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, backgroundColor: c.page, color: c.ink, fontSize: 16 }}
           />
-          {!!text.trim() && !editing && (
-            <IconButton label="Send later" onPress={() => setScheduling(true)}>
-              <Glyph name="clock" color={c.ink} />
-            </IconButton>
-          )}
-          <IconButton label={editing ? 'Save change' : 'Send'} accent onPress={() => sendText()}>
-            <Glyph name={editing ? 'check' : 'send'} color={c.onAccent} />
-          </IconButton>
-        </Row>
+        ) : (
+          <Row gap={space.sm} style={{ paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: tabBarInset + space.sm, borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.surface }}>
+            {!editing && !text.trim() && (
+              <IconButton label="Send a sticker" onPress={() => setStickers(true)}>
+                <Glyph name="smile" color={c.ink} />
+              </IconButton>
+            )}
+            {!editing && (
+              <IconButton label="Send a photo" onPress={sendPhoto}>
+                <Glyph name="photo" color={c.ink} />
+              </IconButton>
+            )}
+            <TextInput
+              ref={input}
+              value={text}
+              onChangeText={(t) => {
+                setText(t);
+                if (t.trim()) room.typing();
+              }}
+              placeholder={editing ? 'Change your message' : 'Message'}
+              placeholderTextColor={c.muted}
+              accessibilityLabel="Message"
+              multiline
+              maxLength={4000}
+              style={{ flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1.5, borderColor: c.line, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, backgroundColor: c.page, color: c.ink, fontSize: 16 }}
+            />
+            {!!text.trim() && !editing && (
+              <IconButton label="Send later" onPress={() => setScheduling(true)}>
+                <Glyph name="clock" color={c.ink} />
+              </IconButton>
+            )}
+            {!editing && !text.trim() ? (
+              <IconButton label="Record a voice note" accent onPress={startVoice}>
+                <Glyph name="mic" color={c.onAccent} />
+              </IconButton>
+            ) : (
+              <IconButton label={editing ? 'Save change' : 'Send'} accent onPress={() => sendText()}>
+                <Glyph name={editing ? 'check' : 'send'} color={c.onAccent} />
+              </IconButton>
+            )}
+          </Row>
+        )}
       </KeyboardAvoidingView>
 
       <Sheet open={!!menu} onClose={() => setMenu(null)}>
