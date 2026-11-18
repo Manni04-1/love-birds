@@ -14,6 +14,7 @@ export const ANIMALS: { key: string; emoji: string; label: string }[] = [
   { key: 'bear', emoji: '🐻', label: 'Bear' },
   { key: 'panda', emoji: '🐼', label: 'Panda' },
   { key: 'koala', emoji: '🐨', label: 'Koala' },
+  { key: 'kangaroo', emoji: '🦘', label: 'Kangaroo' },
   { key: 'fox', emoji: '🦊', label: 'Fox' },
   { key: 'bunny', emoji: '🐰', label: 'Bunny' },
   { key: 'cat', emoji: '🐱', label: 'Cat' },
