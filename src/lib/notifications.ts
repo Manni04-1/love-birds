@@ -9,6 +9,7 @@ import { AppState, Platform } from 'react-native';
 
 import { addDays, parseISODate, timeLabel, toISODate, today } from './dates';
 import { whileAway } from './lock';
+import { loadPlans, occurrencesBetween, shortDay } from './plans';
 import { supabase } from './supabase';
 import type { SpecialDay } from './special-days';
 import type { Plan } from './types';
@@ -131,22 +132,32 @@ const SPECIAL_BODY: Record<SpecialDay['kind'], string> = {
   story: 'A little anniversary of your story. Remember it together today 💞',
 };
 
+// How far ahead plan reminders are set, and at most how many, so a plan that repeats every day
+// doesn't fill the phone's alarms. They're set again each time the app opens.
+const REMIND_DAYS = 45;
+const MOST_REMINDERS = 60;
+
 async function scheduleReminders(plans: Plan[], specials: SpecialDay[]) {
   const perm = await Notifications.getPermissionsAsync();
   if (perm.status !== 'granted') return;
   await ensureChannel();
   await cancelScheduled((id) => !id.startsWith(EVENING));
   const soon = Date.now() + 60_000;
-  for (const plan of plans) {
-    if (!plan.remind) continue;
-    const at = reminderTime(plan);
+  const from = toISODate(today());
+  const to = toISODate(addDays(today(), REMIND_DAYS));
+  // Each time a plan comes round gets its own reminder; a plan over several days, on its first day.
+  const times = occurrencesBetween(plans.filter((p) => p.remind), from, to).filter((o) => o.start >= from);
+  for (const { plan, start, end } of times.slice(0, MOST_REMINDERS)) {
+    const at = reminderTime({ day: start, time: plan.time });
     if (at.getTime() < soon) continue;
+    const several = end > start;
+    const when = several ? [plan.time && timeLabel(plan.time), `Until ${shortDay(end)}`] : [plan.time ? timeLabel(plan.time) : 'All day'];
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: plan.time ? `💕 In an hour: ${plan.title}` : `💕 Today: ${plan.title}`,
-        body: [plan.time ? timeLabel(plan.time) : 'All day', plan.note].filter(Boolean).join(' · '),
+        title: plan.time ? `💕 In an hour: ${plan.title}` : several ? `💕 Starts today: ${plan.title}` : `💕 Today: ${plan.title}`,
+        body: [...when, plan.note].filter(Boolean).join(' · '),
         sound: SOUND,
-        data: { url: `/calendar?day=${plan.day}` },
+        data: { url: `/calendar?day=${start}` },
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
     });
@@ -175,14 +186,10 @@ export function useReminders(coupleId: string | undefined, specials: SpecialDay[
     const sync = () => {
       queue = queue
         .then(async () => {
-          const { data } = await supabase
-            .from('events')
-            .select('*')
-            .eq('couple_id', coupleId)
-            .gte('day', toISODate(today()))
-            .order('day')
-            .limit(60);
-          if (data) await scheduleReminders(data as Plan[], special);
+          // Plans that repeat or last several days can start before today, so loadPlans finds those too.
+          const plans = await loadPlans(coupleId, toISODate(today()), toISODate(addDays(today(), REMIND_DAYS)));
+          // With no signal, the reminders already set stay as they are.
+          if (plans) await scheduleReminders(plans, special);
         })
         .catch(() => {});
     };

@@ -327,6 +327,7 @@ export function DateField({
   maximumDate,
   minimumDate,
   placeholder = 'Choose',
+  initial,
 }: {
   label: string;
   value: string | null;
@@ -335,6 +336,8 @@ export function DateField({
   maximumDate?: Date;
   minimumDate?: Date;
   placeholder?: string;
+  /** Where the picker opens when nothing is chosen yet (YYYY-MM-DD). Today otherwise. */
+  initial?: string | null;
 }) {
   const c = useColors();
   const [open, setOpen] = useState(false);
@@ -347,7 +350,9 @@ export function DateField({
           d.setHours(h, m, 0, 0);
           return d;
         })()
-    : new Date();
+    : mode === 'date' && initial
+      ? parseISODate(initial)
+      : new Date();
   const shown = value ? (mode === 'date' ? shortDate(value) : timeLabel(value)) : placeholder;
 
   const handle = (event: DateTimePickerEvent, picked?: Date) => {
