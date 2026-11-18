@@ -1,20 +1,32 @@
+import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Animated, Easing, KeyboardAvoidingView, Modal, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Animated, Easing, KeyboardAvoidingView, Modal, Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { BackHeader } from '@/components/game-ui';
 import { HeartShape, useReducedMotion } from '@/components/hero';
-import { Button, Chip, Empty, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
+import { Photo } from '@/components/photo';
+import { Button, Chip, DateField, Empty, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { OCCASIONS, occasionEmoji } from '@/content/letters';
-import { dayLabel, toISODate } from '@/lib/dates';
+import { addDays, dayLabel, daysBetween, longDate, parseISODate, toISODate, today } from '@/lib/dates';
+import { pickPhoto, uploadPhoto, type PickedPhoto } from '@/lib/photos';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { radius, space, useColors } from '@/lib/theme';
 import type { Letter } from '@/lib/types';
 
+const clock = () => Date.now();
 const when = (iso: string) => dayLabel(toISODate(new Date(iso)));
+/** A time capsule that can't be opened yet. */
+const locked = (l: Letter) => !!l.unlock_at && new Date(l.unlock_at).getTime() > clock();
+/** "14 February 2027 (in 88 days)". */
+const unlockLabel = (iso: string) => {
+  const day = toISODate(new Date(iso));
+  const n = daysBetween(today(), parseISODate(day));
+  return `${longDate(day)}${n > 1 ? ` (in ${n} days)` : n === 1 ? ' (tomorrow)' : ''}`;
+};
 /** For the middle of a sentence: "today", but "Tue 10 Nov". */
 const whenInline = (iso: string) => {
   const w = when(iso);
@@ -22,7 +34,7 @@ const whenInline = (iso: string) => {
 };
 
 /** A sealed envelope with a heart for a wax seal. */
-function Envelope({ width, flap, sealed }: { width: number; flap?: Animated.AnimatedInterpolation<number>; sealed: boolean }) {
+function Envelope({ width, flap, sealed, lock }: { width: number; flap?: Animated.AnimatedInterpolation<number>; sealed: boolean; lock?: boolean }) {
   const c = useColors();
   const h = width * 0.62;
   return (
@@ -59,7 +71,7 @@ function Envelope({ width, flap, sealed }: { width: number; flap?: Animated.Anim
           <Svg width={30} height={30} viewBox="0 0 30 30" style={{ position: 'absolute' }}>
             <Circle cx={15} cy={15} r={14} fill={c.accent} />
           </Svg>
-          <HeartShape size={14} color={c.onAccent} />
+          {lock ? <Glyph name="lock" color={c.onAccent} size={14} /> : <HeartShape size={14} color={c.onAccent} />}
         </View>
       )}
     </View>
@@ -147,8 +159,10 @@ function OpenLetter({ letter, from, onClose }: { letter: Letter | null; from: st
                 padding: space.xl,
                 gap: space.md,
               }}>
-              <T style={{ fontSize: 34, lineHeight: 40 }}>{occasionEmoji(letter.occasion)}</T>
+              <T style={{ fontSize: 34, lineHeight: 40 }}>{letter.unlock_at ? '⏳' : occasionEmoji(letter.occasion)}</T>
               <T variant="heading">{letter.occasion}</T>
+              {letter.unlock_at ? <T variant="small" muted>A time capsule, sealed {longDate(toISODate(new Date(letter.created_at)))}</T> : null}
+              {letter.photo_path ? <Photo path={letter.photo_path} style={{ width: '100%', aspectRatio: 1, borderRadius: radius.md }} /> : null}
               <T style={{ fontSize: 18, lineHeight: 28 }}>{letter.body}</T>
               <T variant="small" muted style={{ textAlign: 'right' }}>
                 With love, {from}
@@ -180,6 +194,9 @@ function Write({ open, partnerName, onClose, onSent }: { open: boolean; partnerN
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [capsule, setCapsule] = useState(false);
+  const [unlockDay, setUnlockDay] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const own = occasion === '';
 
   async function send() {
@@ -187,13 +204,30 @@ function Write({ open, partnerName, onClose, onSent }: { open: boolean; partnerN
     const title = own ? custom.trim() : occasion;
     if (!title) return setError('Finish the line "Open when…".');
     if (!body.trim()) return setError('Write your letter first.');
+    if (capsule && !unlockDay) return setError('Pick the day it opens.');
     if (!ctx) return;
     setBusy(true);
-    const { error: err } = await supabase.from('letters').insert({ couple_id: ctx.couple.id, occasion: title, body: body.trim() });
+    try {
+      const photoPath = photo ? await uploadPhoto(ctx.couple.id, photo) : null;
+      const { error: err } = await supabase.from('letters').insert({
+        couple_id: ctx.couple.id,
+        occasion: title,
+        body: body.trim(),
+        photo_path: photoPath,
+        // Opens at midnight at the start of the day you picked.
+        unlock_at: capsule && unlockDay ? parseISODate(unlockDay).toISOString() : null,
+      });
+      if (err) throw err;
+    } catch (e) {
+      setBusy(false);
+      return setError(friendlyError(e));
+    }
     setBusy(false);
-    if (err) return setError(friendlyError(err));
     setBody('');
     setCustom('');
+    setPhoto(null);
+    setCapsule(false);
+    setUnlockDay(null);
     onSent();
   }
 
@@ -231,8 +265,53 @@ function Write({ open, partnerName, onClose, onSent }: { open: boolean; partnerN
           </View>
           {own && <Field label="Open when…" value={custom} onChangeText={setCustom} placeholder="Open when you land in Mombasa" maxLength={80} />}
           <Field label="Your letter" value={body} onChangeText={setBody} placeholder="My love…" multiline maxLength={5000} style={{ minHeight: 200 }} />
+          {photo ? (
+            <View style={{ gap: space.sm }}>
+              <Image source={{ uri: photo.uri }} style={{ width: '100%', aspectRatio: 1, borderRadius: radius.md }} contentFit="cover" />
+              <Button title="Remove the photo" variant="ghost" onPress={() => setPhoto(null)} />
+            </View>
+          ) : (
+            <Button
+              title="Add a photo"
+              variant="outline"
+              icon={<Glyph name="photo" color={c.ink} size={18} />}
+              onPress={async () => {
+                try {
+                  const p = await pickPhoto();
+                  if (p) setPhoto(p);
+                } catch (e) {
+                  setError(friendlyError(e));
+                }
+              }}
+            />
+          )}
+          <View style={{ backgroundColor: c.surface, borderColor: capsule ? c.accent : c.line, borderWidth: 1.5, borderRadius: radius.md, padding: space.md, gap: space.md }}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <View style={{ flex: 1 }}>
+                <T variant="strong">⏳ Make it a time capsule</T>
+                <T variant="small" muted>
+                  {partnerName} sees it waiting, but it stays locked until the day you pick.
+                </T>
+              </View>
+              <Switch
+                value={capsule}
+                onValueChange={(v) => {
+                  setCapsule(v);
+                  if (v && occasion === OCCASIONS[0].text) setOccasion('Open when the time comes');
+                }}
+                trackColor={{ true: c.accent, false: c.line }}
+                thumbColor={c.surface}
+                accessibilityLabel="Make it a time capsule"
+              />
+            </Row>
+            {capsule && (
+              <Row style={{ alignItems: 'flex-start' }}>
+                <DateField label="Opens on" value={unlockDay} onChange={setUnlockDay} minimumDate={addDays(today(), 1)} placeholder="Pick a day" />
+              </Row>
+            )}
+          </View>
           <ErrorText>{error}</ErrorText>
-          <Button title="Seal it and send 💌" onPress={send} loading={busy} />
+          <Button title={capsule ? 'Seal the time capsule ⏳' : 'Seal it and send 💌'} onPress={send} loading={busy} />
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -269,6 +348,7 @@ export default function Letters() {
   async function open(l: Letter) {
     setError('');
     if (l.body) return setReading(l);
+    if (locked(l)) return setError(`Not yet! This time capsule opens on ${unlockLabel(l.unlock_at!)} ⏳`);
     const { data, error: err } = await supabase.rpc('open_letter', {
       p_id: l.id,
     });
@@ -280,6 +360,13 @@ export default function Letters() {
     };
     setLetters((prev) => prev.map((x) => (x.id === l.id ? opened : x)));
     setReading(opened);
+    // A photo comes with the letter once it's open.
+    const { data: fresh } = await supabase.rpc('get_letters');
+    const withPhoto = ((fresh ?? []) as Letter[]).find((x) => x.id === l.id);
+    if (withPhoto?.photo_path) {
+      setLetters((fresh ?? []) as Letter[]);
+      setReading((r) => (r && r.id === l.id ? { ...r, photo_path: withPhoto.photo_path } : r));
+    }
   }
 
   function takeBack(l: Letter) {
@@ -307,7 +394,7 @@ export default function Letters() {
           paddingBottom: space.xxl,
         }}>
         <T variant="small" muted>
-          Letters for the right moment. They stay sealed until the one they&apos;re for decides it&apos;s time.
+          Letters for the right moment. They stay sealed until the one they&apos;re for decides it&apos;s time. A time capsule stays locked until its day.
         </T>
         <Button title={`Write a letter for ${partner.name}`} onPress={() => setWriting(true)} />
         <ErrorText>{error}</ErrorText>
@@ -322,7 +409,7 @@ export default function Letters() {
               key={l.id}
               onPress={() => open(l)}
               accessibilityRole="button"
-              accessibilityLabel={`${l.occasion}, from ${partner.name}. ${l.opened_at ? 'Read again' : 'Sealed. Tap to open'}`}
+              accessibilityLabel={`${l.occasion}, from ${partner.name}. ${l.opened_at ? 'Read again' : locked(l) ? `Time capsule, opens ${unlockLabel(l.unlock_at!)}` : 'Sealed. Tap to open'}`}
               style={({ pressed }) => ({
                 width: '47%',
                 flexGrow: 1,
@@ -333,12 +420,18 @@ export default function Letters() {
                 backgroundColor: l.opened_at ? c.surface : c.accentSoft,
                 opacity: pressed ? 0.8 : 1,
               })}>
-              <Envelope width={130} sealed={!l.opened_at} />
+              <Envelope width={130} sealed={!l.opened_at} lock={locked(l)} />
               <T variant="small" style={{ fontWeight: '700', textAlign: 'center' }}>
-                {occasionEmoji(l.occasion)} {l.occasion}
+                {l.unlock_at ? '⏳' : occasionEmoji(l.occasion)} {l.occasion}
               </T>
               <T variant="fine" style={{ textAlign: 'center' }}>
-                {l.opened_at ? `Opened ${whenInline(l.opened_at)}` : `Sealed · ${when(l.created_at)}`}
+                {l.opened_at
+                  ? `Opened ${whenInline(l.opened_at)}`
+                  : locked(l)
+                    ? `Opens ${unlockLabel(l.unlock_at!)}`
+                    : l.unlock_at
+                      ? 'Unlocked! Tap to open ✨'
+                      : `Sealed · ${when(l.created_at)}`}
               </T>
             </Pressable>
           ))}
@@ -364,11 +457,15 @@ export default function Letters() {
               borderRadius: radius.md,
               padding: space.md,
             }}>
-            <T style={{ fontSize: 26, lineHeight: 32 }}>{occasionEmoji(l.occasion)}</T>
+            <T style={{ fontSize: 26, lineHeight: 32 }}>{l.unlock_at ? '⏳' : occasionEmoji(l.occasion)}</T>
             <View style={{ flex: 1 }}>
               <T variant="strong">{l.occasion}</T>
               <T variant="fine">
-                {l.opened_at ? `${partner.name} opened it ${whenInline(l.opened_at)} 💞` : `Still sealed · written ${whenInline(l.created_at)}`}
+                {l.opened_at
+                  ? `${partner.name} opened it ${whenInline(l.opened_at)} 💞`
+                  : locked(l)
+                    ? `Time capsule · opens ${unlockLabel(l.unlock_at!)}`
+                    : `Still sealed · written ${whenInline(l.created_at)}`}
               </T>
             </View>
           </Pressable>

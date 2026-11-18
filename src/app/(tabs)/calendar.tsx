@@ -13,6 +13,7 @@ import { hasMoments, ideaFor, loadFreeDays, loadMoments, setFree, type DayMoment
 import { loadQuestions } from '@/lib/questions';
 import { useCouple } from '@/lib/session';
 import { specialDays, type SpecialDay } from '@/lib/special-days';
+import { useMilestones } from '@/lib/story';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { radius, space, tabBarInset, useColors, useThemeName } from '@/lib/theme';
 import type { Plan, Question } from '@/lib/types';
@@ -246,14 +247,15 @@ export default function Calendar() {
   const myBirthday = ctx?.profile.birthday;
   const partnerBirthday = ctx?.partner.birthday;
   const partnerName = ctx?.partner.name ?? '';
+  const { milestones: story } = useMilestones(coupleId, 'calendar');
   const specials = useMemo(
-    () => specialDays(parseISODate(first), parseISODate(last), { togetherSince: together, myBirthday, partnerBirthday, partnerName }),
-    [first, last, together, myBirthday, partnerBirthday, partnerName],
+    () => specialDays(parseISODate(first), parseISODate(last), { togetherSince: together, myBirthday, partnerBirthday, partnerName, story }),
+    [first, last, together, myBirthday, partnerBirthday, partnerName, story],
   );
   const soonSpecial = useMemo(
     () =>
-      specialDays(today(), addDays(today(), 120), { togetherSince: together, myBirthday, partnerBirthday, partnerName }).find((s) => s.kind !== 'holiday') ?? null,
-    [together, myBirthday, partnerBirthday, partnerName],
+      specialDays(today(), addDays(today(), 120), { togetherSince: together, myBirthday, partnerBirthday, partnerName, story }).find((s) => s.kind !== 'holiday') ?? null,
+    [together, myBirthday, partnerBirthday, partnerName, story],
   );
 
   const daysWithPlans = useMemo(() => new Set(plans.map((p) => p.day)), [plans]);
@@ -467,13 +469,24 @@ export default function Calendar() {
         </T>
 
         {selectedSpecial.map((s) => (
-          <View key={`${s.kind}-${s.title}`} style={{ flexDirection: 'row', gap: space.md, alignItems: 'center', backgroundColor: c.accentSoft, borderRadius: radius.md, padding: space.md }}>
+          <Pressable
+            key={`${s.kind}-${s.title}`}
+            disabled={!s.link}
+            onPress={() => s.link && router.push(s.link as never)}
+            accessibilityRole={s.link ? 'button' : undefined}
+            style={({ pressed }) => ({ flexDirection: 'row', gap: space.md, alignItems: 'center', backgroundColor: c.accentSoft, borderRadius: radius.md, padding: space.md, opacity: pressed ? 0.8 : 1 })}>
             <T style={{ fontSize: 26, lineHeight: 32 }}>{s.emoji}</T>
             <View style={{ flex: 1 }}>
               <T variant="strong">{s.title}</T>
               {s.note ? <T variant="small" muted>{s.note}</T> : null}
+              {s.linkLabel ? (
+                <T variant="small" accent style={{ fontWeight: '700' }}>
+                  {s.linkLabel}
+                </T>
+              ) : null}
             </View>
-          </View>
+            {s.link ? <Glyph name="next" color={c.muted} size={18} /> : null}
+          </Pressable>
         ))}
 
         {future && (

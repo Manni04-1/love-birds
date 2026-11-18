@@ -233,6 +233,9 @@ const GLYPHS = {
   trash: { ios: 'trash', android: 'delete' },
   copy: { ios: 'doc.on.doc', android: 'content_copy' },
   mic: { ios: 'mic.fill', android: 'mic' },
+  search: { ios: 'magnifyingglass', android: 'search' },
+  smile: { ios: 'face.smiling', android: 'mood' },
+  link: { ios: 'link', android: 'link' },
 } as const satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type GlyphName = keyof typeof GLYPHS;
@@ -430,6 +433,21 @@ export function Sheet({ open, onClose, children }: { open: boolean; onClose: () 
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+/** A rounded bar that fills from the left. value runs from 0 to 1. */
+export function ProgressBar({ value, height = 10, label }: { value: number; height?: number; label?: string }) {
+  const c = useColors();
+  const pct = Math.round(Math.max(0, Math.min(1, value || 0)) * 100);
+  return (
+    <View
+      style={{ height, borderRadius: radius.pill, backgroundColor: c.surface2, overflow: 'hidden' }}
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: 100, now: pct }}>
+      <View style={{ width: `${pct}%`, height: '100%', backgroundColor: c.accent, borderRadius: radius.pill }} />
+    </View>
   );
 }
 

@@ -10,6 +10,7 @@ export const OCCASIONS: { emoji: string; text: string }[] = [
   { emoji: '🎂', text: "Open when it's your birthday" },
   { emoji: '🥂', text: 'Open when we celebrate something' },
   { emoji: '🤔', text: 'Open when you doubt us' },
+  { emoji: '⏳', text: 'Open when the time comes' },
 ];
 
 export function occasionEmoji(occasion: string): string {

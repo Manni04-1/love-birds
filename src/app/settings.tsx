@@ -148,6 +148,7 @@ export default function Settings() {
   const theme = useThemeName();
   const font = useFontName();
   const [nickname, setNickname] = useState(ctx?.profile.partner_nickname ?? '');
+  const [privateOn, setPrivateOn] = useState(!!ctx?.profile.private_notifications);
   const userId = ctx?.userId;
   const refreshCouple = ctx?.refresh;
 
@@ -178,7 +179,7 @@ export default function Settings() {
     await refresh();
   }
 
-  async function saveProfile(changes: Record<string, string | null>, note?: string) {
+  async function saveProfile(changes: Record<string, string | boolean | null>, note?: string) {
     setError('');
     const { error: err } = await supabase.from('profiles').update(changes).eq('id', profile.id);
     if (err) return setError(friendlyError(err));
@@ -449,6 +450,24 @@ export default function Settings() {
               trackColor={{ true: c.accent, false: c.line }}
               thumbColor={c.surface}
               accessibilityLabel="Evening reminder"
+            />
+          </Row>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <T variant="strong">Private notifications</T>
+              <T variant="small" muted>
+                Notifications say “New message” instead of showing what {partner.name} wrote in the chat or a letter, so no one else can read it on your lock screen.
+              </T>
+            </View>
+            <Switch
+              value={privateOn}
+              onValueChange={(on) => {
+                setPrivateOn(on);
+                saveProfile({ private_notifications: on });
+              }}
+              trackColor={{ true: c.accent, false: c.line }}
+              thumbColor={c.surface}
+              accessibilityLabel="Private notifications"
             />
           </Row>
         </Group>

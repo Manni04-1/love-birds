@@ -1,6 +1,6 @@
 import { addDays, daysBetween, parseISODate, toISODate } from './dates';
 
-export type SpecialKind = 'anniversary' | 'milestone' | 'birthday' | 'holiday' | 'valentine';
+export type SpecialKind = 'anniversary' | 'milestone' | 'birthday' | 'holiday' | 'valentine' | 'story';
 
 export type SpecialDay = {
   /** YYYY-MM-DD */
@@ -10,6 +10,9 @@ export type SpecialDay = {
   title: string;
   /** A second line, such as "Long weekend" or "Date set by the moon". */
   note?: string;
+  /** Somewhere to go from this day, such as your partner's wishlist on their birthday. */
+  link?: string;
+  linkLabel?: string;
 };
 
 type Who = {
@@ -17,7 +20,16 @@ type Who = {
   myBirthday: string | null | undefined;
   partnerBirthday: string | null | undefined;
   partnerName: string;
+  /** Moments from Our story, remembered every year. */
+  story?: { title: string; emoji: string | null; happened_on: string; yearly: boolean }[];
 };
+
+/** "our first kiss" from "Our first kiss", for the middle of a sentence. */
+export function storyPhrase(title: string): string {
+  const t = title.trim();
+  if (/^[A-Z][a-z]/.test(t) && !/^I\b/.test(t)) return t[0].toLowerCase() + t.slice(1);
+  return t;
+}
 
 // Easter Sunday (the Anonymous Gregorian algorithm).
 function easter(year: number): Date {
@@ -99,7 +111,22 @@ export function specialDays(from: Date, to: Date, who: Who): SpecialDay[] {
     }
     if (who.partnerBirthday) {
       const d = onYear(who.partnerBirthday, year);
-      if (inRange(d)) out.push({ day: toISODate(d), kind: 'birthday', emoji: '🎂', title: `${who.partnerName}'s birthday` });
+      if (inRange(d))
+        out.push({
+          day: toISODate(d),
+          kind: 'birthday',
+          emoji: '🎂',
+          title: `${who.partnerName}'s birthday`,
+          link: '/wishlist?who=partner',
+          linkLabel: `See ${who.partnerName}'s wishlist 🎁`,
+        });
+    }
+    for (const m of who.story ?? []) {
+      if (!m.yearly) continue;
+      const n = year - parseISODate(m.happened_on).getFullYear();
+      const d = onYear(m.happened_on, year);
+      if (n > 0 && inRange(d))
+        out.push({ day: toISODate(d), kind: 'story', emoji: m.emoji || '💞', title: `${n} ${n === 1 ? 'year' : 'years'} since ${storyPhrase(m.title)}`, link: '/our-story', linkLabel: 'See your story' });
     }
     const valentine = new Date(year, 1, 14);
     if (inRange(valentine)) out.push({ day: toISODate(valentine), kind: 'valentine', emoji: '💘', title: "Valentine's Day" });

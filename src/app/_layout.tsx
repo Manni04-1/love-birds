@@ -68,6 +68,14 @@ function Routes() {
         <Stack.Screen name="letters" />
         <Stack.Screen name="bucket-list" />
         <Stack.Screen name="live" />
+        <Stack.Screen name="tonight" />
+        <Stack.Screen name="lists" />
+        <Stack.Screen name="chat-search" />
+        <Stack.Screen name="wishlist" />
+        <Stack.Screen name="our-story" />
+        <Stack.Screen name="coupons" />
+        <Stack.Screen name="trip-fund" />
+        <Stack.Screen name="recap" />
       </Stack.Protected>
     </Stack>
   );
