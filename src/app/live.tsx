@@ -1,22 +1,26 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FloatingHearts } from '@/components/floating-hearts';
-import { BackHeader, Option, Panel, Pill } from '@/components/game-ui';
-import { Avatar, Button, Row, T } from '@/components/ui';
-import { initialLive, isHost, liveReducer, pickQuestion, questionByKey, revealed, type Choice } from '@/lib/live';
+import { BackHeader, Panel } from '@/components/game-ui';
+import { LiesGame, PickGame, TodGame, type GameProps, type SavedRound } from '@/components/live-games';
+import { Avatar, Button, Card, Glyph, Row, T } from '@/components/ui';
+import { sharedHeat } from '@/lib/games';
+import { isHost, isLiveGame, LIVE_GAMES, newerChoice, noChoice, type GameChoice, type LiveGame } from '@/lib/live';
+import { useLiveRoom } from '@/lib/live-room';
 import { useCouple } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
-import { space, useColors } from '@/lib/theme';
+import { radius, space, useColors } from '@/lib/theme';
 
 type Invite = 'idle' | 'sending' | 'sent' | 'recent' | 'error';
+
+const clock = () => Date.now();
 
 /** Your rounds so far, newest first. */
 async function fetchRounds(coupleId: string) {
   const { data } = await supabase.from('live_rounds').select('question_key, matched').eq('couple_id', coupleId).order('played_at', { ascending: false }).limit(1000);
-  return (data ?? []) as { question_key: string; matched: boolean }[];
+  return (data ?? []) as SavedRound[];
 }
 
 function Player({ name, partner, here }: { name: string; partner?: boolean; here: boolean }) {
@@ -35,153 +39,86 @@ function Player({ name, partner, here }: { name: string; partner?: boolean; here
   );
 }
 
+function GamePicker({ onPick }: { onPick: (g: LiveGame) => void }) {
+  const c = useColors();
+  return (
+    <View style={{ gap: space.md }}>
+      {LIVE_GAMES.map((g) => (
+        <Card key={g.key} onPress={() => onPick(g.key)} accessibilityLabel={`${g.title}. ${g.blurb}`}>
+          <Row gap={space.md}>
+            <View style={{ width: 52, height: 52, borderRadius: radius.md, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+              <T style={{ fontSize: 28, lineHeight: 34 }}>{g.emoji}</T>
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <T variant="strong" style={{ fontSize: 18 }}>
+                {g.title}
+              </T>
+              <T variant="small" muted>
+                {g.blurb}
+              </T>
+            </View>
+            <Glyph name="next" color={c.muted} />
+          </Row>
+        </Card>
+      ))}
+    </View>
+  );
+}
+
+/** Live games: either of you picks a game, and it opens on both phones. */
 export default function Live() {
   const c = useColors();
   const ctx = useCouple();
   const coupleId = ctx?.couple.id;
   const userId = ctx?.userId;
-  const partnerId = ctx?.partner.id;
-  const host = !!userId && !!partnerId && isHost(userId, partnerId);
-  const [state, dispatch] = useReducer(liveReducer, initialLive);
-  const [partnerHere, setPartnerHere] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const room = useLiveRoom(coupleId, userId);
+  const [choice, setChoice] = useState<GameChoice>(noChoice);
+  const choiceRef = useRef(choice);
+  const [history, setHistory] = useState<SavedRound[]>([]);
   const [invite, setInvite] = useState<Invite>('idle');
-  const [allTime, setAllTime] = useState<{ played: number; matched: number } | null>(null);
   const [burst, setBurst] = useState(0);
-  const channel = useRef<RealtimeChannel | null>(null);
-  const stateRef = useRef(state);
-  const round = useRef<{ id: string; key: string } | null>(null);
-  const recent = useRef<string[]>([]);
-  const saved = useRef(new Set<string>());
-  const celebrated = useRef(new Set<string>());
+  const { listen, send } = room;
 
   useEffect(() => {
-    stateRef.current = state;
+    choiceRef.current = choice;
   });
 
-  const send = useCallback(
-    (event: 'hello' | 'round' | 'pick' | 'next', payload: Record<string, unknown> = {}) => {
-      channel.current?.send({ type: 'broadcast', event, payload: { ...payload, from: userId } });
-    },
-    [userId],
-  );
-
   const loadHistory = useCallback(() => {
-    if (!coupleId) return;
-    fetchRounds(coupleId).then((rows) => {
-      setAllTime({ played: rows.length, matched: rows.filter((r) => r.matched).length });
-      const keys = rows.slice(0, 40).map((r) => r.question_key);
-      recent.current = [...recent.current, ...keys.filter((k) => !recent.current.includes(k))];
-    });
+    if (coupleId) fetchRounds(coupleId).then(setHistory);
   }, [coupleId]);
 
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
 
-  /** Host only: ask the next question. */
-  const startRound = useCallback(() => {
-    const q = pickQuestion(recent.current, Math.random());
-    recent.current = [q.key, ...recent.current.filter((k) => k !== q.key)];
-    const id = `${Date.now().toString(36)}-${q.key}`;
-    round.current = { id, key: q.key };
-    dispatch({ type: 'round', id, key: q.key });
-    send('round', { id, key: q.key });
-  }, [send]);
+  const onHearts = useCallback(() => setBurst((b) => b + 1), []);
 
-  // The latest handlers, for the channel listeners set up once below.
-  const handlers = useRef({ startRound, send, host });
-  useEffect(() => {
-    handlers.current = { startRound, send, host };
-  });
+  // Agree on the game: when your partner arrives you tell them yours, and the latest choice wins.
+  useEffect(
+    () =>
+      listen((m) => {
+        if (m.type === 'hello') {
+          if (choiceRef.current.at) send({ type: 'game', choice: choiceRef.current });
+          return;
+        }
+        if (m.type !== 'game' || !m.choice || typeof m.choice !== 'object') return;
+        const incoming = m.choice as Partial<GameChoice>;
+        if ((incoming.game !== null && !isLiveGame(incoming.game)) || typeof incoming.at !== 'number' || typeof incoming.by !== 'string') return;
+        setChoice((cur) => newerChoice(cur, { game: incoming.game ?? null, at: incoming.at!, by: incoming.by! }));
+      }),
+    [listen, send],
+  );
 
-  useEffect(() => {
-    if (!coupleId || !userId) return;
-    const ch = supabase.channel(`live:${coupleId}`, { config: { presence: { key: userId }, broadcast: { self: false } } });
-    channel.current = ch;
-    ch.on('presence', { event: 'sync' }, () => {
-      setPartnerHere(Object.keys(ch.presenceState()).some((k) => k !== userId));
-    })
-      .on('broadcast', { event: 'hello' }, ({ payload }) => {
-        if (payload?.from === userId) return;
-        // Your partner just arrived: bring them up to date.
-        const h = handlers.current;
-        const s = stateRef.current;
-        if (h.host && round.current) h.send('round', round.current);
-        if (s.id && s.mine !== null) h.send('pick', { id: s.id, choice: s.mine });
-      })
-      .on('broadcast', { event: 'round' }, ({ payload }) => {
-        if (payload?.from === userId || typeof payload?.id !== 'string' || !questionByKey(payload.key)) return;
-        round.current = { id: payload.id, key: payload.key };
-        dispatch({ type: 'round', id: payload.id, key: payload.key });
-      })
-      .on('broadcast', { event: 'pick' }, ({ payload }) => {
-        if (payload?.from === userId || (payload?.choice !== 0 && payload?.choice !== 1)) return;
-        dispatch({ type: 'pick', who: 'them', id: String(payload.id), choice: payload.choice });
-      })
-      .on('broadcast', { event: 'next' }, ({ payload }) => {
-        if (payload?.from === userId) return;
-        if (handlers.current.host && revealed(stateRef.current)) handlers.current.startRound();
-      })
-      .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') return;
-        setConnected(true);
-        if (AppState.currentState === 'active') ch.track({ at: Date.now() });
-        ch.send({ type: 'broadcast', event: 'hello', payload: { from: userId } });
-      });
-    const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') {
-        ch.track({ at: Date.now() });
-        ch.send({ type: 'broadcast', event: 'hello', payload: { from: userId } });
-      } else ch.untrack();
-    });
-    return () => {
-      sub.remove();
-      channel.current = null;
-      supabase.removeChannel(ch);
-    };
-  }, [coupleId, userId]);
-
-  // The host asks the first question as soon as you're both here.
-  useEffect(() => {
-    if (host && connected && partnerHere && !round.current) startRound();
-  }, [host, connected, partnerHere, startRound]);
-
-  // Once you've both picked: hearts if you matched, and the host saves the round.
-  const done = revealed(state);
-  useEffect(() => {
-    if (!done || !state.id || !state.key) return;
-    const same = state.mine === state.theirs;
-    if (same && !celebrated.current.has(state.id)) {
-      celebrated.current.add(state.id);
-      setBurst((b) => b + 1);
-    }
-    if (host && coupleId && !saved.current.has(state.id)) {
-      saved.current.add(state.id);
-      supabase
-        .from('live_rounds')
-        .insert({ couple_id: coupleId, question_key: state.key, matched: same })
-        .then(() => loadHistory());
-    } else if (!host) {
-      // Give the host a moment to save it first.
-      setTimeout(loadHistory, 1500);
-    }
-  }, [done, state.id, state.key, state.mine, state.theirs, host, coupleId, loadHistory]);
-
-  if (!ctx) return null;
+  if (!ctx || !coupleId || !userId) return null;
   const { profile, partner } = ctx;
-  const q = questionByKey(state.key);
+  const host = isHost(userId, partner.id);
+  const game = choice.game;
+  const info = LIVE_GAMES.find((g) => g.key === game);
 
-  function pick(choice: Choice) {
-    const s = stateRef.current;
-    if (!s.id || s.mine !== null) return;
-    dispatch({ type: 'pick', who: 'me', id: s.id, choice });
-    send('pick', { id: s.id, choice });
-  }
-
-  function next() {
-    if (host) startRound();
-    else send('next');
+  function choose(next: LiveGame | null) {
+    const picked: GameChoice = { game: next, at: clock(), by: userId! };
+    setChoice(picked);
+    send({ type: 'game', choice: picked });
   }
 
   async function sendInvite() {
@@ -198,91 +135,73 @@ export default function Live() {
     error: 'That invite didn’t go through. Check your connection and try again.',
   };
 
+  const props: GameProps = {
+    room,
+    host,
+    partner: partner.name,
+    coupleId,
+    heat: sharedHeat(profile, partner),
+    history,
+    onSaved: loadHistory,
+    onHearts,
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
       <BackHeader title="Play live" />
-      <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, gap: space.lg }}>
-        <Row>
-          <Player name={profile.name} here={connected} />
-          <T style={{ fontSize: 26, lineHeight: 32 }}>{done && state.mine === state.theirs ? '💞' : '🎮'}</T>
-          <Player name={partner.name} partner here={partnerHere} />
-        </Row>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, gap: space.lg }} keyboardShouldPersistTaps="handled">
+          <Row>
+            <Player name={profile.name} here={room.connected} />
+            <T style={{ fontSize: 26, lineHeight: 32 }}>{info?.emoji ?? '🎮'}</T>
+            <Player name={partner.name} partner here={room.partnerHere} />
+          </Row>
 
-        {!partnerHere ? (
-          <Panel tone="soft">
-            <T variant="heading">Waiting for {partner.name}</T>
-            <T variant="small">
-              You both get the same this-or-that question at the same moment. Pick fast, then see if you picked alike. It starts as soon as {partner.name} opens
-              this screen.
-            </T>
-            <Button title={invite === 'sent' ? 'Invite sent' : `Invite ${partner.name}`} onPress={sendInvite} loading={invite === 'sending'} disabled={invite === 'sent'} />
-            {!!inviteNote[invite] && <T variant="small">{inviteNote[invite]}</T>}
-          </Panel>
-        ) : !q ? (
-          <Panel>
-            <Row>
-              <ActivityIndicator color={c.accent} />
-              <T variant="small" muted>
-                Getting the first question…
+          {!room.partnerHere && (
+            <Panel tone="soft">
+              <T variant="heading">Waiting for {partner.name}</T>
+              <T variant="small">
+                {game
+                  ? `${info?.title} starts as soon as ${partner.name} opens Play live.`
+                  : `Pick a game, then invite ${partner.name}. It opens on both phones as soon as they’re here.`}
               </T>
-            </Row>
-          </Panel>
-        ) : (
-          <Panel>
-            <T variant="eyebrow">Round {state.played + (done ? 0 : 1)} · This or that?</T>
-            {[q.a, q.b].map((label, i) => {
-              const mine = state.mine === i;
-              const theirs = done && state.theirs === i;
-              return (
-                <Option
-                  key={i}
-                  label={label}
-                  selected={mine}
-                  disabled={state.mine !== null}
-                  onPress={() => pick(i as Choice)}
-                  trailing={
-                    <Row gap={4}>
-                      {mine && <Pill accent>You</Pill>}
-                      {theirs && <Pill>{partner.name}</Pill>}
-                    </Row>
-                  }
-                />
-              );
-            })}
-            {!done ? (
-              <T variant="small" muted>
-                {state.mine === null
-                  ? state.theirs !== null
-                    ? `${partner.name} has picked. Your turn!`
-                    : 'Go with your gut.'
-                  : `Waiting for ${partner.name}…`}
-              </T>
-            ) : (
-              <>
-                <T variant="heading" style={{ textAlign: 'center' }}>
-                  {state.mine === state.theirs ? 'Same! 💞' : 'Different picks 😄'}
+              <Button title={invite === 'sent' ? 'Invite sent' : `Invite ${partner.name}`} onPress={sendInvite} loading={invite === 'sending'} disabled={invite === 'sent'} />
+              {!!inviteNote[invite] && <T variant="small">{inviteNote[invite]}</T>}
+            </Panel>
+          )}
+
+          {!game ? (
+            <View style={{ gap: space.sm }}>
+              <T variant="eyebrow">Pick a game</T>
+              {room.partnerHere && (
+                <T variant="small" muted>
+                  It opens on {partner.name}’s phone too.
                 </T>
-                <Button title="Next question" onPress={next} />
-              </>
-            )}
-          </Panel>
-        )}
-
-        {(state.played > 0 || (allTime && allTime.played > 0)) && (
-          <View style={{ gap: 4, alignItems: 'center' }}>
-            {state.played > 0 && (
-              <T variant="strong">
-                This game: {state.matched} of {state.played} alike
-              </T>
-            )}
-            {!!allTime?.played && (
-              <T variant="small" muted>
-                All time: {allTime.matched} of {allTime.played} alike ({Math.round((allTime.matched / allTime.played) * 100)}%)
-              </T>
-            )}
-          </View>
-        )}
-      </ScrollView>
+              )}
+              <GamePicker onPick={choose} />
+            </View>
+          ) : (
+            <>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <T variant="heading" style={{ flex: 1 }}>
+                  {info?.title}
+                </T>
+                <Button title="Change game" variant="ghost" onPress={() => choose(null)} />
+              </Row>
+              {/* Kept open while your partner steps away, so the score survives. */}
+              <View style={{ display: room.partnerHere ? 'flex' : 'none' }}>
+                {game === 'this-or-that' || game === 'likely' ? (
+                  <PickGame key={game} game={game} {...props} />
+                ) : game === 'lies' ? (
+                  <LiesGame {...props} />
+                ) : (
+                  <TodGame {...props} />
+                )}
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
       <FloatingHearts burst={burst} />
     </SafeAreaView>
   );
