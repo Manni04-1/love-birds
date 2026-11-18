@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, useColorScheme, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Pressable, TextInput, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
@@ -141,7 +141,11 @@ export default function Chat() {
           </T>
         </Pressable>
       )}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
+      {/*
+        The keyboard covers the tab bar, so the composer's tab bar padding can sit behind it too.
+        That way the message box rests just above the keyboard rather than a tab bar's height above it.
+      */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={-tabBarInset}>
         <FlatList
           inverted
           data={messages}

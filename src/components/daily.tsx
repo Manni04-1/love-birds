@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, View } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Modal, Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeartShape, usePulse, useReducedMotion } from '@/components/hero';
 import { Photo } from '@/components/photo';
@@ -231,6 +232,7 @@ export function MoodRow({ mine, partner, partnerName, onPick }: { mine: Mood | n
 /** A sheet of moods to pick from, with an optional word of your own. */
 export function MoodPicker({ open, current, onClose, onSave }: { open: boolean; current: Mood | null; onClose: () => void; onSave: (emoji: string, word: string) => Promise<void> }) {
   const c = useColors();
+  const insets = useSafeAreaInsets();
   const [emoji, setEmoji] = useState(current?.emoji ?? '');
   const [word, setWord] = useState(current?.word ?? '');
   const [busy, setBusy] = useState(false);
@@ -261,47 +263,60 @@ export function MoodPicker({ open, current, onClose, onSave }: { open: boolean; 
   }
 
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} accessibilityLabel="Close" />
-        <View style={{ backgroundColor: c.page, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.lg, paddingBottom: space.xxl, gap: space.md }}>
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      {/* Padding works on both phones now that the app draws edge to edge, so the sheet rides up above the keyboard. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <Pressable style={{ flex: 1, minHeight: insets.top + space.lg, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} accessibilityLabel="Close" />
+        <View
+          style={{
+            flexShrink: 1,
+            backgroundColor: c.page,
+            borderTopLeftRadius: radius.xl,
+            borderTopRightRadius: radius.xl,
+            padding: space.lg,
+            paddingBottom: space.lg + insets.bottom,
+            gap: space.md,
+          }}>
           <Row style={{ justifyContent: 'space-between' }}>
             <T variant="heading">How are you feeling?</T>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}>
               <Glyph name="close" color={c.muted} />
             </Pressable>
           </Row>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-            {MOODS.map((m) => {
-              const selected = emoji === m.emoji;
-              return (
-                <Pressable
-                  key={m.emoji}
-                  onPress={() => {
-                    setEmoji(m.emoji);
-                    setWord(m.word);
-                  }}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={m.word}
-                  style={{
-                    width: '23%',
-                    flexGrow: 1,
-                    alignItems: 'center',
-                    paddingVertical: space.sm,
-                    borderRadius: radius.md,
-                    borderWidth: 2,
-                    borderColor: selected ? c.accent : 'transparent',
-                    backgroundColor: selected ? c.accentSoft : c.surface,
-                  }}>
-                  <T style={{ fontSize: 28, lineHeight: 34 }}>{m.emoji}</T>
-                  <T variant="fine" numberOfLines={1} color={selected ? c.ink : c.muted}>
-                    {m.word}
-                  </T>
-                </Pressable>
-              );
-            })}
-          </View>
+          {/* When the keyboard is up there isn't room for every mood, so they scroll and the box and button stay in view. */}
+          <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+              {MOODS.map((m) => {
+                const selected = emoji === m.emoji;
+                return (
+                  <Pressable
+                    key={m.emoji}
+                    onPress={() => {
+                      setEmoji(m.emoji);
+                      setWord(m.word);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={m.word}
+                    style={{
+                      width: '23%',
+                      flexGrow: 1,
+                      alignItems: 'center',
+                      paddingVertical: space.sm,
+                      borderRadius: radius.md,
+                      borderWidth: 2,
+                      borderColor: selected ? c.accent : 'transparent',
+                      backgroundColor: selected ? c.accentSoft : c.surface,
+                    }}>
+                    <T style={{ fontSize: 28, lineHeight: 34 }}>{m.emoji}</T>
+                    <T variant="fine" numberOfLines={1} color={selected ? c.ink : c.muted}>
+                      {m.word}
+                    </T>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
           <Field label="In your own words (optional)" value={word} onChangeText={setWord} maxLength={40} placeholder="Missing you" />
           <ErrorText>{error}</ErrorText>
           <Button title="Share my mood" onPress={save} loading={busy} disabled={!emoji} />

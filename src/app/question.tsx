@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Button, Card, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
@@ -73,7 +73,7 @@ export default function QuestionScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm }}>
           <IconButton label="Back" onPress={() => router.back()}>
             <Glyph name="back" color={c.ink} />
