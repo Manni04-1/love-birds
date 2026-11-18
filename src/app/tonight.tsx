@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { FloatingHearts } from '@/components/floating-hearts';
 import { BackHeader, Panel } from '@/components/game-ui';
 import { SwipeDeck } from '@/components/swipe-deck';
@@ -237,6 +238,7 @@ export default function Tonight() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Tonight" home="/together" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {!loaded ? null : showSetup ? (

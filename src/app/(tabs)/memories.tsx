@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { Photo } from '@/components/photo';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
 import { Chip, Empty, Glyph, IconButton, Row, T } from '@/components/ui';
@@ -330,6 +331,7 @@ export default function Memories() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, justifyContent: 'space-between' }}>
         <T variant="title">Memories</T>
         <Row gap={space.sm}>

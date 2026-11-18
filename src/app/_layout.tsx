@@ -13,11 +13,12 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppLock } from '@/components/app-lock';
+import { Intro } from '@/components/intro';
 import { SessionProvider, useSession } from '@/lib/session';
 import { FontNameProvider, isFontName, isThemeName, setCustomFonts, ThemeNameProvider, useColors } from '@/lib/theme';
 import { useAppUpdates } from '@/lib/updates';
@@ -29,10 +30,7 @@ function Routes() {
   const c = useColors();
   useAppUpdates();
 
-  useEffect(() => {
-    if (ready) SplashScreen.hideAsync();
-  }, [ready]);
-
+  // The splash screen hands over to the opening animation (Intro), which fades out once this is ready.
   if (!ready) return null;
 
   const signedIn = !!session;
@@ -121,6 +119,7 @@ export default function RootLayout() {
             <AppLock>
               <Routes />
             </AppLock>
+            <Intro />
           </Themed>
         </SessionProvider>
       </ThemeProvider>

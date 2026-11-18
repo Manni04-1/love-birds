@@ -13,6 +13,8 @@ const rose = {
   onAccent: '#FFFFFF',
   accent2: '#F08A5D',
   onAccent2: '#3B1425',
+  accent3: '#7B5CC4',
+  onAccent3: '#FFFFFF',
   danger: '#B42318',
   onDanger: '#FFFFFF',
 };
@@ -36,6 +38,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#2A0A16',
       accent2: '#FF9E73',
       onAccent2: '#2A0A16',
+      accent3: '#B79CFF',
+      onAccent3: '#2A0A16',
       danger: '#FF7A6E',
       onDanger: '#2A0A16',
     },
@@ -53,21 +57,25 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#FFFFFF',
       accent2: '#C9A227',
       onAccent2: '#2B1D12',
+      accent3: '#2F7F73',
+      onAccent3: '#FFFFFF',
       danger: '#A4281B',
       onDanger: '#FFFFFF',
     },
     dark: {
-      page: '#17110C',
-      surface: '#241A12',
-      surface2: '#33261A',
-      ink: '#F2E4CC',
-      muted: '#BFA483',
-      line: '#433223',
-      accent: '#D9894A',
-      accentSoft: '#4A3020',
+      page: '#120C08',
+      surface: '#261A11',
+      surface2: '#36261A',
+      ink: '#F6E8CF',
+      muted: '#C6A982',
+      line: '#4E3925',
+      accent: '#E38D4F',
+      accentSoft: '#4E2F1B',
       onAccent: '#1B120B',
       accent2: '#E3BC4E',
       onAccent2: '#1B120B',
+      accent3: '#5FC0AC',
+      onAccent3: '#1B120B',
       danger: '#FF8A70',
       onDanger: '#1B120B',
     },
@@ -85,6 +93,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#FFFFFF',
       accent2: '#F2B33D',
       onAccent2: '#1D3320',
+      accent3: '#3B7FC4',
+      onAccent3: '#FFFFFF',
       danger: '#B42318',
       onDanger: '#FFFFFF',
     },
@@ -100,6 +110,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#0C170D',
       accent2: '#F5C45E',
       onAccent2: '#0C170D',
+      accent3: '#7EB8F2',
+      onAccent3: '#0C170D',
       danger: '#FF7A6E',
       onDanger: '#0C170D',
     },
@@ -117,6 +129,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#FFFFFF',
       accent2: '#6E7F2A',
       onAccent2: '#FFFFFF',
+      accent3: '#9A4C8E',
+      onAccent3: '#FFFFFF',
       danger: '#A4281B',
       onDanger: '#FFFFFF',
     },
@@ -132,6 +146,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#1B0F05',
       accent2: '#B3C35A',
       onAccent2: '#1B0F05',
+      accent3: '#D58BCB',
+      onAccent3: '#1B0F05',
       danger: '#FF8A70',
       onDanger: '#1B0F05',
     },
@@ -149,6 +165,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#FFFFFF',
       accent2: '#F0B64A',
       onAccent2: '#0F2E33',
+      accent3: '#D9573F',
+      onAccent3: '#FFFFFF',
       danger: '#B42318',
       onDanger: '#FFFFFF',
     },
@@ -164,6 +182,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#041314',
       accent2: '#F5C566',
       onAccent2: '#041314',
+      accent3: '#FF8E7A',
+      onAccent3: '#041314',
       danger: '#FF7A6E',
       onDanger: '#041314',
     },
@@ -181,6 +201,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#FFFFFF',
       accent2: '#E8B93C',
       onAccent2: '#1B1840',
+      accent3: '#C2417F',
+      onAccent3: '#FFFFFF',
       danger: '#B42318',
       onDanger: '#FFFFFF',
     },
@@ -196,6 +218,8 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onAccent: '#0B0B22',
       accent2: '#F2C94C',
       onAccent2: '#0B0B22',
+      accent3: '#FF86C0',
+      onAccent3: '#0B0B22',
       danger: '#FF7A6E',
       onDanger: '#0B0B22',
     },
@@ -237,8 +261,34 @@ export function useColors(): Colors {
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const radius = { sm: 12, md: 16, lg: 20, xl: 26, pill: 999 } as const;
 
-/** Room to leave at the bottom of tab screens so content clears the tab bar. */
-export const tabBarInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+/**
+ * Room to leave at the bottom of tab screens so content clears the tab bar.
+ * On iPhone the tab bar floats over the screen. On Android the screen already ends above it, so it needs none.
+ */
+export const tabBarInset = Platform.select({ ios: 50, default: 0 }) ?? 0;
+
+/* Colour helpers --------------------------------------------------------- */
+
+function rgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.replace(/./g, (x) => x + x) : h.slice(0, 6);
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** A theme colour you can see through: alpha('#D3325F', 0.2) is 'rgba(211,50,95,0.2)'. */
+export function alpha(hex: string, a: number): string {
+  const [r, g, b] = rgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/** A colour part way between two others: t = 0 gives a, t = 1 gives b. */
+export function mix(a: string, b: string, t: number): string {
+  const x = rgb(a);
+  const y = rgb(b);
+  const out = x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0'));
+  return `#${out.join('')}`;
+}
 
 /* Fonts ------------------------------------------------------------------ */
 

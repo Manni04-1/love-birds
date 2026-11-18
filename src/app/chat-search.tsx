@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { Photo } from '@/components/photo';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
@@ -136,6 +137,7 @@ export default function ChatSearch() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Search and saved" home="/chat" />
       <View style={{ paddingHorizontal: space.lg, gap: space.md, paddingBottom: space.sm }}>
         <Row gap={0} style={{ backgroundColor: c.surface2, borderRadius: radius.pill, padding: 3 }}>

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { Button, Card, ErrorText, Field, Glyph, Row, Sheet, T } from '@/components/ui';
 import { BUCKET_IDEAS } from '@/content/bucket';
@@ -242,6 +243,7 @@ export default function BucketList() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Bucket list" home="/together" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView

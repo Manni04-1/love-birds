@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, useColorScheme, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
@@ -50,12 +50,12 @@ export function usePulse(duration: number, delay = 0, reduced = false) {
   return v;
 }
 
-const HEART = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
+export const HEART_PATH = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
 
 export function HeartShape({ size, color }: { size: number; color: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d={HEART} fill={color} />
+      <Path d={HEART_PATH} fill={color} />
     </Svg>
   );
 }
@@ -375,16 +375,18 @@ function StarryScene({ dark, height, reduced }: SceneProps) {
 type SceneProps = { dark: boolean; height: number; reduced: boolean };
 
 function Backdrop({ id, stops, height, children }: { id: string; stops: string[]; height: number; children?: ReactNode }) {
+  // Each hero needs its own gradient id: on the web, two screens that share one hide each other's sky.
+  const gid = `bg-${id}-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <Svg style={{ position: 'absolute', left: 0, top: 0 }} width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="xMidYMid slice">
       <Defs>
-        <LinearGradient id={`bg-${id}`} x1="0" y1="0" x2="0" y2="1">
+        <LinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
           {stops.map((c, i) => (
             <Stop key={i} offset={i / (stops.length - 1)} stopColor={c} />
           ))}
         </LinearGradient>
       </Defs>
-      <Rect x={0} y={0} width={W} height={height} fill={`url(#bg-${id})`} />
+      <Rect x={0} y={0} width={W} height={height} fill={`url(#${gid})`} />
       {children}
     </Svg>
   );

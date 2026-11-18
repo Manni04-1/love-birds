@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { FloatingHearts } from '@/components/floating-hearts';
 import { BackHeader } from '@/components/game-ui';
 import { Photo } from '@/components/photo';
@@ -181,6 +182,7 @@ export default function MonthlyRecap() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Monthly recap" home="/together" />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, gap: space.md, paddingBottom: space.xxl }}>
         <Row style={{ justifyContent: 'space-between' }}>

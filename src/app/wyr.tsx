@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader, LevelPicker, Option, Panel, Pill } from '@/components/game-ui';
 import { Button, ErrorText, Row, T } from '@/components/ui';
 import { levelInfo, unlockedLevels, WYR, type Level, type WyrQuestion } from '@/content/games';
@@ -57,6 +58,7 @@ export default function WouldYouRather() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Would you rather" />
       <LevelPicker
         levels={levels}

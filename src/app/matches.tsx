@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { IdeaTags, planIdea } from '@/components/date-ideas';
 import { Button, Empty, ErrorText, Glyph, IconButton, Row, T } from '@/components/ui';
 import { categoryInfo } from '@/content/ideas';
@@ -129,6 +130,7 @@ export default function Matches() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm }}>
         <IconButton label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace({ pathname: '/together', params: { tab: 'ideas' } }))}>
           <Glyph name="back" color={c.ink} />

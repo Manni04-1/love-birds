@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { LoveBirdsMark } from '@/components/mark';
 import { Button, Card, T } from '@/components/ui';
 import { isConfigured } from '@/lib/supabase';
@@ -11,6 +12,7 @@ export default function Welcome() {
   const c = useColors();
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: c.page }]}>
+      <ThemeBackdrop />
       <View style={styles.hero}>
         <View style={[styles.logo, { backgroundColor: c.accent }]}>
           <LoveBirdsMark size={92} />

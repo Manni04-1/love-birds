@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader, LevelPicker, Option, Panel, Pill } from '@/components/game-ui';
 import { Button, ErrorText, Glyph, Row, T } from '@/components/ui';
 import { levelInfo, QUIZ, unlockedLevels, type Level, type QuizQuestion } from '@/content/games';
@@ -71,6 +72,7 @@ export default function Quiz() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="How well do you know me" />
       <LevelPicker levels={levels} value={active} badges={badges} onChange={(l) => { setLevel(l); next(); }} />
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled">

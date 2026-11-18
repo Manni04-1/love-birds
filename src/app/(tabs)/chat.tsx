@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, t
 import { Animated, FlatList, KeyboardAvoidingView, PanResponder, Pressable, TextInput, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
+import { PartnerCard } from '@/components/partner-card';
 import { Photo } from '@/components/photo';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
 import { StickerArt, StickerPicker } from '@/components/sticker';
@@ -125,6 +127,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Map<string, Reaction[]>>(new Map());
   const [text, setText] = useState('');
+  const [cardOpen, setCardOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -410,21 +413,28 @@ export default function Chat() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: c.line }}>
-        <View>
-          <Avatar name={partner.name} partner size={40} />
-          {room.partnerOnline && (
-            <View style={{ position: 'absolute', right: 1, bottom: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: '#2BB673', borderWidth: 2, borderColor: c.page }} />
-          )}
-        </View>
-        <View style={{ flex: 1 }}>
-          <T variant="strong" style={{ fontSize: 18 }}>
-            {partner.name}
-          </T>
-          <T variant="fine" color={room.partnerTyping || room.partnerOnline ? c.accent : undefined}>
-            {status}
-          </T>
-        </View>
+        <Pressable
+          onPress={() => setCardOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${partner.name}'s profile`}
+          style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, opacity: pressed ? 0.75 : 1 })}>
+          <View>
+            <Avatar name={partner.name} partner size={40} />
+            {room.partnerOnline && (
+              <View style={{ position: 'absolute', right: 1, bottom: 1, width: 12, height: 12, borderRadius: 6, backgroundColor: '#2BB673', borderWidth: 2, borderColor: c.page }} />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <T variant="strong" style={{ fontSize: 18 }}>
+              {partner.name}
+            </T>
+            <T variant="fine" color={room.partnerTyping || room.partnerOnline ? c.accent : undefined}>
+              {status}
+            </T>
+          </View>
+        </Pressable>
         <IconButton label="Search and saved messages" onPress={() => router.push('/chat-search')}>
           <Glyph name="search" color={c.ink} />
         </IconButton>
@@ -455,8 +465,9 @@ export default function Chat() {
         </Pressable>
       )}
       {/*
-        The keyboard covers the tab bar, so the composer's tab bar padding can sit behind it too.
-        That way the message box rests just above the keyboard rather than a tab bar's height above it.
+        On iPhone the tab bar floats over the screen, so the composer leaves room for it, and that room
+        can sit behind the keyboard too. On Android the screen already ends above the tab bar, so the
+        composer sits right on it (tabBarInset is 0) and the message box rests just above the keyboard.
       */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={-tabBarInset}>
         <FlatList
@@ -733,6 +744,7 @@ export default function Chat() {
 
       <StickerPicker open={stickers} onClose={() => setStickers(false)} onPick={sendSticker} animal={profile.animal} />
       <PhotoViewer photos={viewer?.photos ?? []} start={viewer ? viewer.start : null} onClose={() => setViewer(null)} />
+      <PartnerCard open={cardOpen} onClose={() => setCardOpen(false)} />
     </SafeAreaView>
   );
 }

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { Button, Chip, DateField, ErrorText, Field, Glyph, Row, Sheet, T } from '@/components/ui';
 import { STORY_IDEAS } from '@/content/story';
@@ -105,6 +106,7 @@ export default function OurStory() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Our story" home="/together" />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, gap: space.lg, paddingBottom: space.xxl }}>
         <View style={{ gap: 4 }}>

@@ -5,6 +5,7 @@ import { Alert, Animated, Easing, KeyboardAvoidingView, Modal, Pressable, Scroll
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { HeartShape, useReducedMotion } from '@/components/hero';
 import { Photo } from '@/components/photo';
@@ -386,6 +387,7 @@ export default function Letters() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Open-when letters" home="/chat" />
       <ScrollView
         contentContainerStyle={{

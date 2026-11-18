@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'rea
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { Button, ErrorText, Glyph, IconButton, Row, T } from '@/components/ui';
 import { useCouple } from '@/lib/session';
@@ -172,6 +173,7 @@ export default function Lists() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Our lists" home="/together" />
       <Row gap={0} style={{ marginHorizontal: space.lg, backgroundColor: c.surface2, borderRadius: radius.pill, padding: 3 }}>
         {LISTS.map((l) => {

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Linking, Platform, Pressable, ScrollView, Switch, Text, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
 import { Hero, heroInk } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
@@ -314,6 +315,7 @@ export default function Settings() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm }}>
         <IconButton label="Back" onPress={() => router.back()}>
           <Glyph name="back" color={c.ink} />

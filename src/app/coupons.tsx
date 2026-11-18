@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { FloatingHearts } from '@/components/floating-hearts';
 import { BackHeader } from '@/components/game-ui';
 import { Button, Card, Empty, ErrorText, Field, Row, T } from '@/components/ui';
@@ -148,6 +149,7 @@ export default function Coupons() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Love coupons" home="/together" />
       <Row gap={0} style={{ marginHorizontal: space.lg, backgroundColor: c.surface2, borderRadius: radius.pill, padding: 3 }}>
         {(

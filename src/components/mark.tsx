@@ -1,11 +1,12 @@
 import Svg, { Circle, G, Path } from 'react-native-svg';
 
-type BirdColors = { body: string; wing: string; eye: string; beak: string };
+export type BirdColors = { body: string; wing: string; eye: string; beak: string };
 
-const WHITE: BirdColors = { body: '#FFFFFF', wing: '#FFC2D4', eye: '#B3164F', beak: '#FF8A3D' };
-const GOLD: BirdColors = { body: '#FFD27A', wing: '#F2A93B', eye: '#7A1238', beak: '#FF8A3D' };
+export const WHITE: BirdColors = { body: '#FFFFFF', wing: '#FFC2D4', eye: '#B3164F', beak: '#FF8A3D' };
+export const GOLD: BirdColors = { body: '#FFD27A', wing: '#F2A93B', eye: '#7A1238', beak: '#FF8A3D' };
 
-function Bird({ c, flip }: { c: BirdColors; flip?: boolean }) {
+/** One of the two birds, facing right. flip turns it to face left. */
+export function Bird({ c, flip }: { c: BirdColors; flip?: boolean }) {
   return (
     <G transform={flip ? 'translate(100 0) scale(-1 1)' : undefined}>
       <Path d="M50 87 C42 92 35 95 27 95.5 C34 92 40 88 45 83 Z" fill={c.wing} />
