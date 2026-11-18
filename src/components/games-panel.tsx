@@ -63,7 +63,7 @@ export function GamesPanel() {
       <GameCard
         emoji="🎮"
         title="Play live"
-        body={`This or that, at the same moment. See how often you and ${partner.name} pick alike.`}
+        body="Four games for when you're both in the app: this or that, who's more likely to, two truths and a lie, and truth or dare."
         stat={room.partnerOnline ? `${partner.name} is here now. Play together!` : `Invite ${partner.name} to play`}
         onPress={() => router.push('/live')}
       />
