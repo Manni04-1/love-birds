@@ -1,13 +1,13 @@
 import { router } from 'expo-router';
 import { useUpdates } from 'expo-updates';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Switch, useColorScheme, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Switch, Text, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
 import { Hero, heroInk } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
-import { Button, Chip, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
+import { Avatar, Button, Chip, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { today } from '@/lib/dates';
 import { sharedHeat } from '@/lib/games';
 import { biometricsAvailable, lockSupported, setBiometrics, setLockAfter, type LockAfter } from '@/lib/lock';
@@ -15,7 +15,8 @@ import { enableNotifications, eveningReminderOn, setEveningReminder, type Notifi
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import type { BubbleStyle } from '@/lib/types';
-import { radius, space, THEMES, useColors, useThemeName, type ThemeName } from '@/lib/theme';
+import { ANIMALS } from '@/content/animals';
+import { FONTS, fontFor, radius, space, THEMES, useColors, useFontName, useThemeName, type FontName, type ThemeName } from '@/lib/theme';
 import { downloadUpdate, restartIntoUpdate, updatesEnabled, versionLabel } from '@/lib/updates';
 
 function Group({ label, children }: { label: string; children: ReactNode }) {
@@ -90,6 +91,22 @@ function ThemeChoice({ name, label, emoji, blurb, selected, onPress }: { name: T
   );
 }
 
+function FontChoice({ name, label, blurb, selected, onPress }: { name: FontName; label: string; blurb: string; selected: boolean; onPress: () => void }) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${label} font. ${blurb}`}
+      style={{ flex: 1, minWidth: 96, padding: space.md, gap: 4, borderRadius: radius.md, borderWidth: 2, borderColor: selected ? c.accent : c.line, backgroundColor: selected ? c.accentSoft : c.surface }}>
+      <Text style={[{ color: c.ink, fontSize: 24, fontWeight: '700' }, fontFor(700, true, name)]}>Aa</Text>
+      <Text style={[{ color: c.ink, fontSize: 15, fontWeight: '700' }, fontFor(700, name === 'playful', name)]}>{label}</Text>
+      <Text style={[{ color: c.muted, fontSize: 12.5 }, fontFor(400, false, name)]}>{blurb}</Text>
+    </Pressable>
+  );
+}
+
 const LOCK_AFTER: { after: LockAfter; label: string }[] = [
   { after: 0, label: 'Right away' },
   { after: 60, label: 'After 1 minute' },
@@ -129,6 +146,8 @@ export default function Settings() {
   const [pinTask, setPinTask] = useState<PinTask | null>(null);
   const [canBio, setCanBio] = useState(false);
   const theme = useThemeName();
+  const font = useFontName();
+  const [nickname, setNickname] = useState(ctx?.profile.partner_nickname ?? '');
   const userId = ctx?.userId;
   const refreshCouple = ctx?.refresh;
 
@@ -156,6 +175,14 @@ export default function Settings() {
     setThemeError('');
     const { error: err } = await supabase.from('profiles').update({ theme: name }).eq('id', profile.id);
     if (err) return setThemeError(friendlyError(err));
+    await refresh();
+  }
+
+  async function saveProfile(changes: Record<string, string | null>, note?: string) {
+    setError('');
+    const { error: err } = await supabase.from('profiles').update(changes).eq('id', profile.id);
+    if (err) return setError(friendlyError(err));
+    if (note) setSaved(note);
     await refresh();
   }
 
@@ -281,11 +308,32 @@ export default function Settings() {
           {name.trim() !== profile.name && <Button title="Save name" onPress={saveName} loading={saving} />}
           <Row style={{ justifyContent: 'space-between' }}>
             <T muted>Partner</T>
-            <T variant="strong">{partner.name}</T>
+            <T variant="strong">{partner.real_name ?? partner.name}</T>
           </Row>
+          <Field
+            label={`What you call ${partner.real_name ?? partner.name} (optional)`}
+            placeholder="Babe, Mpenzi, Sweetie…"
+            value={nickname}
+            onChangeText={(t) => {
+              setNickname(t);
+              setSaved('');
+            }}
+            maxLength={30}
+          />
+          {nickname.trim() !== (profile.partner_nickname ?? '') && (
+            <Button
+              title={nickname.trim() ? 'Save pet name' : 'Use their name again'}
+              onPress={() => saveProfile({ partner_nickname: nickname.trim() || null }, nickname.trim() ? `${partner.real_name ?? partner.name} now shows as ${nickname.trim()}` : 'Pet name removed')}
+            />
+          )}
+          <T variant="fine">Only changes what you see, and the name on notifications from them.</T>
           <Row style={{ alignItems: 'flex-start' }}>
             <DateField label="Together since" value={couple.together_since} onChange={saveSince} maximumDate={today()} />
           </Row>
+          <Row style={{ alignItems: 'flex-start' }}>
+            <DateField label="Your birthday" value={profile.birthday ?? null} onChange={(v) => v && saveProfile({ birthday: v }, 'Birthday saved')} maximumDate={today()} placeholder="Add it" />
+          </Row>
+          <T variant="fine">Birthdays and anniversaries show on the calendar.</T>
           {saved ? <T variant="small" accent>{saved}</T> : null}
           <ErrorText>{error}</ErrorText>
         </Group>
@@ -300,6 +348,43 @@ export default function Settings() {
             ))}
           </View>
           <ErrorText>{themeError}</ErrorText>
+        </Group>
+
+        <Group label="Your animal">
+          <Row>
+            <Avatar name={profile.name} size={56} />
+            <T variant="small" muted style={{ flex: 1 }}>
+              Pick an animal to stand for you in your circle, all around the app. {partner.name} picks their own.
+            </T>
+          </Row>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {ANIMALS.map((a) => {
+              const on = profile.animal === a.key;
+              return (
+                <Pressable
+                  key={a.key}
+                  onPress={() => saveProfile({ animal: on ? null : a.key })}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={a.label}
+                  style={{ width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: on ? c.accent : 'transparent', backgroundColor: on ? c.accentSoft : c.surface }}>
+                  <T style={{ fontSize: 28, lineHeight: 34 }}>{a.emoji}</T>
+                </Pressable>
+              );
+            })}
+          </View>
+          {profile.animal ? <Button title="Use my initial instead" variant="ghost" onPress={() => saveProfile({ animal: null })} /> : null}
+        </Group>
+
+        <Group label="Font">
+          <T variant="small" muted>
+            Just for you, like your theme.
+          </T>
+          <Row gap={space.sm} style={{ alignItems: 'stretch', flexWrap: 'wrap' }}>
+            {FONTS.map((f) => (
+              <FontChoice key={f.name} {...f} selected={font === f.name} onPress={() => saveProfile({ font: f.name })} />
+            ))}
+          </Row>
         </Group>
 
         <Group label="Your chat bubble">

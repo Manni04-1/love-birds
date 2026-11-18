@@ -1,28 +1,201 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Pressable, ScrollView, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Empty, Glyph, IconButton, Row, T } from '@/components/ui';
-import { dayLabel, monthLabel, parseISODate, timeLabel, toISODate, today } from '@/lib/dates';
+import { Hero, heroInk } from '@/components/hero';
+import { Photo } from '@/components/photo';
+import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
+import { Avatar, Button, Empty, Glyph, IconButton, Row, T } from '@/components/ui';
+import { addDays, dayLabel, daysBetween, monthLabel, parseISODate, timeLabel, toISODate, today } from '@/lib/dates';
+import { hashRank } from '@/lib/games';
+import { hasMoments, ideaFor, loadFreeDays, loadMoments, setFree, type DayMoments, type FreeDay, type IdeaPick } from '@/lib/our-days';
+import { loadQuestions } from '@/lib/questions';
 import { useCouple } from '@/lib/session';
-import { supabase } from '@/lib/supabase';
-import { radius, space, tabBarInset, useColors } from '@/lib/theme';
-import type { Plan } from '@/lib/types';
+import { specialDays, type SpecialDay } from '@/lib/special-days';
+import { friendlyError, supabase } from '@/lib/supabase';
+import { radius, space, tabBarInset, useColors, useThemeName } from '@/lib/theme';
+import type { Plan, Question } from '@/lib/types';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+type Next = { day: string; title: string; emoji: string; kind: 'plan' | 'special' };
+
+/** A big countdown to whatever's next: a plan, an anniversary, a birthday or a milestone. */
+function Countdown({ next, onPress }: { next: Next | null; onPress: () => void }) {
+  const theme = useThemeName();
+  const dark = useColorScheme() === 'dark';
+  const ink = heroInk(theme, dark);
+  const n = next ? daysBetween(today(), parseISODate(next.day)) : 0;
+  const shadow = { textShadowColor: ink.shadow, textShadowRadius: 8 };
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={next ? `${next.title}, ${n === 0 ? 'today' : `in ${n} days`}` : 'Add a plan'}>
+      <Hero height={132}>
+        <Row style={{ flex: 1, padding: space.lg, justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <T variant="eyebrow" color={ink.soft} style={shadow}>
+              {next ? (next.kind === 'plan' ? 'Next plan' : 'Coming up') : 'Nothing planned yet'}
+            </T>
+            <T variant="heading" color={ink.ink} style={shadow} numberOfLines={2}>
+              {next ? `${next.emoji} ${next.title}` : 'Tap to plan something together'}
+            </T>
+            {next ? (
+              <T variant="small" color={ink.soft} style={shadow}>
+                {dayLabel(next.day)}
+              </T>
+            ) : null}
+          </View>
+          {next ? (
+            <View style={{ alignItems: 'center', minWidth: 76 }}>
+              {n <= 0 ? (
+                <T variant="title" color={ink.ink} style={shadow}>
+                  Today!
+                </T>
+              ) : (
+                <>
+                  <T variant="display" color={ink.ink} style={[shadow, { fontSize: 46, lineHeight: 52 }]}>
+                    {n}
+                  </T>
+                  <T variant="small" color={ink.soft} style={[shadow, { fontWeight: '700' }]}>
+                    {n === 1 ? 'day to go' : 'days to go'}
+                  </T>
+                </>
+              )}
+            </View>
+          ) : null}
+        </Row>
+      </Hero>
+    </Pressable>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={{ gap: space.sm }}>
+      <T variant="small" muted style={{ fontWeight: '700' }}>
+        {title}
+      </T>
+      {children}
+    </View>
+  );
+}
+
+/** Everything you shared on a day, like a page from a diary you keep together. */
+function OurDay({ day, m, partnerName, question, onOpenPhoto }: { day: string; m: DayMoments | undefined; partnerName: string; question: Question | null; onOpenPhoto: (photos: ViewerPhoto[], i: number) => void }) {
+  const c = useColors();
+  if (!m || !hasMoments(m)) {
+    return <Empty>{day === toISODate(today()) ? 'Nothing shared yet today. Moods, check-ins, photos and answers will gather here.' : 'Nothing shared this day.'}</Empty>;
+  }
+  const photos: ViewerPhoto[] = [];
+  if (m.photos.mine?.photo_path) photos.push({ path: m.photos.mine.photo_path, caption: m.photos.mine.caption, note: 'Your photo of the day' });
+  if (m.photos.partner?.photo_path) photos.push({ path: m.photos.partner.photo_path, caption: m.photos.partner.caption, note: `${partnerName}'s photo of the day` });
+  for (const mem of m.memories) if (mem.photo_path) photos.push({ path: mem.photo_path, caption: mem.caption, note: mem.place });
+  const lines = (ci: DayMoments['checkins']['mine']) =>
+    ci ? [ci.rose && `🌹 ${ci.rose}`, ci.thorn && `🌵 ${ci.thorn}`, ci.bud && `🌱 ${ci.bud}`].filter(Boolean).join('\n') : '';
+
+  return (
+    <View style={{ backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.xl, padding: space.lg, gap: space.md }}>
+      {(m.moods.mine || m.moods.partner) && (
+        <Section title="Moods">
+          <Row gap={space.lg} style={{ flexWrap: 'wrap' }}>
+            {m.moods.mine && (
+              <Row gap={6}>
+                <Avatar name="You" size={28} />
+                <T>
+                  {m.moods.mine.emoji} {m.moods.mine.word ?? ''}
+                </T>
+              </Row>
+            )}
+            {m.moods.partner && (
+              <Row gap={6}>
+                <Avatar name={partnerName} partner size={28} />
+                <T>
+                  {m.moods.partner.emoji} {m.moods.partner.word ?? ''}
+                </T>
+              </Row>
+            )}
+          </Row>
+        </Section>
+      )}
+      {(m.checkins.mine || m.checkins.partner) && (
+        <Section title="Rose, thorn and bud">
+          {m.checkins.mine && <T>{lines(m.checkins.mine)}</T>}
+          {m.checkins.partner &&
+            (m.checkins.partner.rose ? (
+              <View style={{ gap: 2 }}>
+                <T variant="fine">{partnerName}</T>
+                <T>{lines(m.checkins.partner)}</T>
+              </View>
+            ) : (
+              <T variant="small" muted>
+                {partnerName} shared theirs. It shows once you&apos;ve shared yours.
+              </T>
+            ))}
+        </Section>
+      )}
+      {photos.length > 0 && (
+        <Section title="Photos">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+            {photos.map((p, i) => (
+              <Pressable key={`${p.path}-${i}`} onPress={() => onOpenPhoto(photos, i)} accessibilityRole="imagebutton" accessibilityLabel={`Open ${p.note ?? 'photo'}`}>
+                <Photo path={p.path} style={{ width: 104, height: 104, borderRadius: radius.md }} label={p.caption ?? undefined} />
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Section>
+      )}
+      {m.photos.partner && !m.photos.partner.photo_path && (
+        <T variant="small" muted>
+          {partnerName} added a photo. It shows once you&apos;ve added yours.
+        </T>
+      )}
+      {(m.answers.mine || m.answers.partner) && (
+        <Section title={question ? `Daily question: ${question.text}` : 'Daily question'}>
+          {m.answers.mine?.body && <T>You: {m.answers.mine.body}</T>}
+          {m.answers.partner &&
+            (m.answers.partner.body ? (
+              <T>
+                {partnerName}: {m.answers.partner.body}
+              </T>
+            ) : (
+              <T variant="small" muted>
+                {partnerName} answered. You&apos;ll see it once you&apos;ve answered too.
+              </T>
+            ))}
+        </Section>
+      )}
+      {m.memories.length > 0 && (
+        <Section title="Memories">
+          {m.memories.map((mem) => (
+            <T key={mem.id}>
+              💞 {mem.caption}
+              {mem.place ? ` · ${mem.place}` : ''}
+            </T>
+          ))}
+        </Section>
+      )}
+    </View>
+  );
+}
 
 export default function Calendar() {
   const c = useColors();
   const ctx = useCouple();
   const coupleId = ctx?.couple.id;
+  const userId = ctx?.userId;
   const params = useLocalSearchParams<{ day?: string }>();
   const [selected, setSelected] = useState(toISODate(today()));
   const [month, setMonth] = useState(() => new Date(today().getFullYear(), today().getMonth(), 1));
   const [plans, setPlans] = useState<Plan[]>([]);
   const [upcoming, setUpcoming] = useState<Plan[]>([]);
+  const [moments, setMoments] = useState<Map<string, DayMoments>>(new Map());
+  const [free, setFreeDays] = useState<FreeDay[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [idea, setIdea] = useState<{ day: string; pick: IdeaPick | null } | null>(null);
+  const [viewer, setViewer] = useState<{ photos: ViewerPhoto[]; start: number } | null>(null);
+  const [freeError, setFreeError] = useState('');
 
-  // Opening the calendar from Home jumps to that plan's day.
+  // Opening the calendar from Home or a notification jumps to that day.
   const [jumpedTo, setJumpedTo] = useState<string | undefined>(undefined);
   if (params.day && params.day !== jumpedTo) {
     setJumpedTo(params.day);
@@ -31,17 +204,24 @@ export default function Calendar() {
     setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
   }
 
+  const first = toISODate(month);
+  const last = toISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+
   const load = useCallback(async () => {
-    if (!coupleId) return;
-    const first = toISODate(month);
-    const last = toISODate(new Date(month.getFullYear(), month.getMonth() + 1, 0));
-    const [inMonth, next] = await Promise.all([
+    if (!coupleId || !userId) return;
+    const [inMonth, next, m, f, q] = await Promise.all([
       supabase.from('events').select('*').eq('couple_id', coupleId).gte('day', first).lte('day', last).order('day').order('time', { nullsFirst: true }),
       supabase.from('events').select('*').eq('couple_id', coupleId).gte('day', toISODate(today())).order('day').order('time', { nullsFirst: true }).limit(5),
+      loadMoments(coupleId, userId, first, last),
+      loadFreeDays(coupleId, first, last),
+      loadQuestions(),
     ]);
     setPlans((inMonth.data ?? []) as Plan[]);
     setUpcoming((next.data ?? []) as Plan[]);
-  }, [coupleId, month]);
+    setMoments(m);
+    setFreeDays(f);
+    setQuestions(q);
+  }, [coupleId, userId, first, last]);
 
   useFocusEffect(
     useCallback(() => {
@@ -49,22 +229,63 @@ export default function Calendar() {
     }, [load]),
   );
 
-  // Show plans your partner adds while you're looking.
+  // Show plans and free evenings your partner adds while you're looking.
   useEffect(() => {
     if (!coupleId) return;
     const channel = supabase
       .channel(`events:${coupleId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `couple_id=eq.${coupleId}` }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'free_days' }, () => load())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, [coupleId, load]);
 
+  const together = ctx?.couple.together_since;
+  const myBirthday = ctx?.profile.birthday;
+  const partnerBirthday = ctx?.partner.birthday;
+  const partnerName = ctx?.partner.name ?? '';
+  const specials = useMemo(
+    () => specialDays(parseISODate(first), parseISODate(last), { togetherSince: together, myBirthday, partnerBirthday, partnerName }),
+    [first, last, together, myBirthday, partnerBirthday, partnerName],
+  );
+  const soonSpecial = useMemo(
+    () =>
+      specialDays(today(), addDays(today(), 120), { togetherSince: together, myBirthday, partnerBirthday, partnerName }).find((s) => s.kind !== 'holiday') ?? null,
+    [together, myBirthday, partnerBirthday, partnerName],
+  );
+
   const daysWithPlans = useMemo(() => new Set(plans.map((p) => p.day)), [plans]);
+  const specialByDay = useMemo(() => {
+    const m = new Map<string, SpecialDay[]>();
+    for (const s of specials) m.set(s.day, [...(m.get(s.day) ?? []), s]);
+    return m;
+  }, [specials]);
+  const freeByDay = useMemo(() => {
+    const m = new Map<string, { me: boolean; them: boolean }>();
+    for (const f of free) {
+      const e = m.get(f.day) ?? { me: false, them: false };
+      if (f.user_id === userId) e.me = true;
+      else e.them = true;
+      m.set(f.day, e);
+    }
+    return m;
+  }, [free, userId]);
+
+  // A date idea for a selected evening you're both free.
+  const bothFreeSelected = !!freeByDay.get(selected)?.me && !!freeByDay.get(selected)?.them;
+  useEffect(() => {
+    if (!coupleId || !bothFreeSelected) return;
+    let active = true;
+    ideaFor(coupleId, selected, hashRank).then((pick) => active && setIdea({ day: selected, pick }));
+    return () => {
+      active = false;
+    };
+  }, [coupleId, selected, bothFreeSelected]);
 
   if (!ctx) return null;
-  const { userId, partner } = ctx;
+  const { partner, couple } = ctx;
 
   const lead = (month.getDay() + 6) % 7;
   const daysIn = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -72,6 +293,34 @@ export default function Calendar() {
   while (cells.length % 7) cells.push(null);
   const todayIso = toISODate(today());
   const selectedPlans = plans.filter((p) => p.day === selected);
+  const selectedSpecial = specialByDay.get(selected) ?? [];
+  const selectedFree = freeByDay.get(selected) ?? { me: false, them: false };
+  const selectedQuestion = (() => {
+    const qid = moments.get(selected)?.answers.mine?.question_id ?? moments.get(selected)?.answers.partner?.question_id;
+    return questions.find((q) => q.id === qid) ?? null;
+  })();
+
+  const nextPlan: Next | null = upcoming[0] ? { day: upcoming[0].day, title: upcoming[0].title, emoji: '📅', kind: 'plan' } : null;
+  const nextSpecial: Next | null = soonSpecial ? { day: soonSpecial.day, title: soonSpecial.title, emoji: soonSpecial.emoji, kind: 'special' } : null;
+  const next = nextPlan && nextSpecial ? (nextSpecial.day < nextPlan.day ? nextSpecial : nextPlan) : (nextPlan ?? nextSpecial);
+
+  function jump(day: string) {
+    setSelected(day);
+    const d = parseISODate(day);
+    setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+  }
+
+  async function toggleFree(on: boolean) {
+    if (!userId) return;
+    setFreeError('');
+    setFreeDays((prev) => (on ? [...prev, { user_id: userId, day: selected }] : prev.filter((f) => !(f.user_id === userId && f.day === selected))));
+    try {
+      await setFree(couple.id, userId, selected, on);
+    } catch (e) {
+      setFreeError(friendlyError(e));
+      load();
+    }
+  }
 
   function confirmDelete(p: Plan) {
     Alert.alert('Delete this plan?', `"${p.title}" will disappear for both of you.`, [
@@ -91,6 +340,7 @@ export default function Calendar() {
     <Pressable
       key={p.id}
       onLongPress={() => confirmDelete(p)}
+      onPress={showDay ? () => jump(p.day) : undefined}
       accessibilityHint="Long press to delete"
       style={{ flexDirection: 'row', gap: space.md, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.md, padding: space.md }}>
       <View style={{ width: 78 }}>
@@ -107,6 +357,9 @@ export default function Calendar() {
     </Pressable>
   );
 
+  const future = selected >= todayIso;
+  const pick = idea?.day === selected ? idea.pick : null;
+
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.page }}>
       <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, justifyContent: 'space-between' }}>
@@ -116,6 +369,8 @@ export default function Calendar() {
         </IconButton>
       </Row>
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, paddingBottom: tabBarInset + space.xl, gap: space.md }}>
+        <Countdown next={next} onPress={() => (next ? jump(next.day) : router.push({ pathname: '/new-plan', params: { day: selected } }))} />
+
         <Row style={{ justifyContent: 'space-between' }}>
           <IconButton label="Previous month" onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
             <Glyph name="prev" color={c.ink} />
@@ -142,13 +397,26 @@ export default function Calendar() {
               const isSel = iso === selected;
               const isToday = iso === todayIso;
               const has = daysWithPlans.has(iso);
+              const shared = hasMoments(moments.get(iso));
+              const special = specialByDay.get(iso)?.[0];
+              const f = freeByDay.get(iso);
+              const bothFree = !!f?.me && !!f?.them;
+              const label = [
+                parseISODate(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }),
+                special?.title,
+                has && 'has plans',
+                shared && 'shared moments',
+                bothFree && 'you are both free',
+              ]
+                .filter(Boolean)
+                .join(', ');
               return (
                 <Pressable
                   key={iso}
                   onPress={() => setSelected(iso)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isSel }}
-                  accessibilityLabel={`${parseISODate(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}${has ? ', has plans' : ''}`}
+                  accessibilityLabel={label}
                   style={{ width: `${100 / 7}%`, aspectRatio: 1, padding: 2 }}>
                   <View
                     style={{
@@ -157,25 +425,96 @@ export default function Calendar() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 3,
-                      backgroundColor: isSel ? c.accent : 'transparent',
+                      backgroundColor: isSel ? c.accent : bothFree ? c.accentSoft : 'transparent',
                       borderWidth: isToday && !isSel ? 2 : 0,
                       borderColor: c.accent,
                     }}>
+                    {special && (
+                      <T style={{ position: 'absolute', top: 1, right: 2, fontSize: 10, lineHeight: 13 }} accessibilityElementsHidden importantForAccessibility="no">
+                        {special.emoji}
+                      </T>
+                    )}
                     <T style={{ fontWeight: '600', fontVariant: ['tabular-nums'] }} color={isSel ? c.onAccent : c.ink}>
                       {parseISODate(iso).getDate()}
                     </T>
-                    <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: has ? (isSel ? c.onAccent : c.accent) : 'transparent' }} />
+                    <Row gap={3}>
+                      <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: has ? (isSel ? c.onAccent : c.accent) : 'transparent' }} />
+                      {shared && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: isSel ? c.onAccent : c.accent2 }} />}
+                    </Row>
                   </View>
                 </Pressable>
               );
             })}
           </View>
+          <Row gap={space.md} style={{ flexWrap: 'wrap', justifyContent: 'center', marginTop: space.sm }}>
+            <Row gap={4}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent }} />
+              <T variant="fine">Plans</T>
+            </Row>
+            <Row gap={4}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: c.accent2 }} />
+              <T variant="fine">Your day together</T>
+            </Row>
+            <Row gap={4}>
+              <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: c.accentSoft }} />
+              <T variant="fine">Both free</T>
+            </Row>
+          </Row>
         </View>
 
-        <T variant="strong" style={{ marginTop: space.sm }}>
+        <T variant="strong" style={{ marginTop: space.sm, fontSize: 18 }}>
           {dayLabel(selected)}
         </T>
-        {selectedPlans.length ? selectedPlans.map((p) => planRow(p, false)) : <Empty>Nothing planned. Tap + to add something for you both.</Empty>}
+
+        {selectedSpecial.map((s) => (
+          <View key={`${s.kind}-${s.title}`} style={{ flexDirection: 'row', gap: space.md, alignItems: 'center', backgroundColor: c.accentSoft, borderRadius: radius.md, padding: space.md }}>
+            <T style={{ fontSize: 26, lineHeight: 32 }}>{s.emoji}</T>
+            <View style={{ flex: 1 }}>
+              <T variant="strong">{s.title}</T>
+              {s.note ? <T variant="small" muted>{s.note}</T> : null}
+            </View>
+          </View>
+        ))}
+
+        {future && (
+          <View style={{ backgroundColor: c.surface, borderColor: bothFreeSelected ? c.accent : c.line, borderWidth: bothFreeSelected ? 2 : 1, borderRadius: radius.md, padding: space.md, gap: space.sm }}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <T variant="strong">{bothFreeSelected ? 'You’re both free this evening 🎉' : 'Free this evening?'}</T>
+                <T variant="small" muted>
+                  {selectedFree.them ? `${partner.name} is free.` : `${partner.name} hasn’t said yet.`}
+                  {selectedFree.me ? ' You are too.' : ''}
+                </T>
+              </View>
+              <Button title={selectedFree.me ? 'I’m free ✓' : 'I’m free'} variant={selectedFree.me ? 'primary' : 'outline'} onPress={() => toggleFree(!selectedFree.me)} />
+            </Row>
+            {bothFreeSelected && pick && (
+              <View style={{ gap: space.sm, borderTopWidth: 1, borderTopColor: c.line, paddingTop: space.sm }}>
+                <T variant="small" accent style={{ fontWeight: '700' }}>
+                  {pick.matched ? 'You both liked this idea' : 'How about this?'}
+                </T>
+                <T variant="strong">{pick.title}</T>
+                {pick.details ? <T variant="small" muted>{pick.details}</T> : null}
+                <Button
+                  title="Plan it for this evening"
+                  onPress={() => router.push({ pathname: '/new-plan', params: { day: selected, title: pick.title, ...(pick.matched ? { match: pick.id } : {}) } })}
+                />
+              </View>
+            )}
+            {freeError ? <T variant="small" color={c.danger}>{freeError}</T> : null}
+          </View>
+        )}
+
+        {selectedPlans.length ? selectedPlans.map((p) => planRow(p, false)) : future ? <Empty>Nothing planned. Tap + to add something for you both.</Empty> : null}
+
+        {!future || selected === todayIso ? (
+          <>
+            <T variant="strong" style={{ marginTop: space.sm }}>
+              Your day together
+            </T>
+            <OurDay day={selected} m={moments.get(selected)} partnerName={partner.name} question={selectedQuestion} onOpenPhoto={(photos, start) => setViewer({ photos, start })} />
+          </>
+        ) : null}
 
         <T variant="strong" style={{ marginTop: space.sm }}>
           Coming up
@@ -183,6 +522,7 @@ export default function Calendar() {
         {upcoming.length ? upcoming.map((p) => planRow(p, true)) : <Empty>No plans ahead yet.</Empty>}
         <T variant="fine">Long press a plan to delete it.</T>
       </ScrollView>
+      <PhotoViewer photos={viewer?.photos ?? []} start={viewer ? viewer.start : null} onClose={() => setViewer(null)} />
     </SafeAreaView>
   );
 }

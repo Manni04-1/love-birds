@@ -249,14 +249,44 @@ export function setCustomFonts(on: boolean) {
   customFonts = on;
 }
 
+/** The fonts you can pick in Settings. Each of you picks your own. */
+export type FontName = 'classic' | 'playful' | 'handwritten';
+
+export const FONTS: { name: FontName; label: string; blurb: string }[] = [
+  { name: 'classic', label: 'Classic', blurb: 'Clean and easy to read' },
+  { name: 'playful', label: 'Playful', blurb: 'Round and bubbly' },
+  { name: 'handwritten', label: 'Handwritten', blurb: 'Headings like a love note' },
+];
+
+export function isFontName(value: unknown): value is FontName {
+  return value === 'classic' || value === 'playful' || value === 'handwritten';
+}
+
+const FontContext = createContext<FontName>('classic');
+
+/** Wraps the app in the signed-in person's font. */
+export const FontNameProvider = FontContext.Provider;
+
+export function useFontName(): FontName {
+  return useContext(FontContext);
+}
+
 /**
- * The font for a weight: Bricolage Grotesque for headings, Nunito Sans for everything else.
+ * The font for a weight. Classic is Bricolage Grotesque for headings and Nunito Sans for
+ * everything else; Playful is Fredoka throughout; Handwritten puts headings in Kalam.
  * Returns the family plus a plain weight, because Android can't combine a custom family with fontWeight.
  */
-export function fontFor(weight: string | number | undefined, display = false): { fontFamily?: string; fontWeight?: 'normal' } {
+export function fontFor(weight: string | number | undefined, display = false, font: FontName = 'classic'): { fontFamily?: string; fontWeight?: 'normal' } {
   if (!customFonts) return {};
   const w = Number(weight === 'bold' ? 700 : weight === 'normal' || weight == null ? 400 : weight) || 400;
-  if (display) return { fontFamily: w >= 800 ? 'BricolageGrotesque_800ExtraBold' : 'BricolageGrotesque_700Bold', fontWeight: 'normal' };
+  if (font === 'playful') {
+    const family = display || w >= 800 ? 'Fredoka_700Bold' : w >= 700 ? 'Fredoka_600SemiBold' : w >= 600 ? 'Fredoka_500Medium' : 'Fredoka_400Regular';
+    return { fontFamily: family, fontWeight: 'normal' };
+  }
+  if (display) {
+    if (font === 'handwritten') return { fontFamily: 'Kalam_700Bold', fontWeight: 'normal' };
+    return { fontFamily: w >= 800 ? 'BricolageGrotesque_800ExtraBold' : 'BricolageGrotesque_700Bold', fontWeight: 'normal' };
+  }
   const family = w >= 800 ? 'NunitoSans_800ExtraBold' : w >= 700 ? 'NunitoSans_700Bold' : w >= 600 ? 'NunitoSans_600SemiBold' : 'NunitoSans_400Regular';
   return { fontFamily: family, fontWeight: 'normal' };
 }

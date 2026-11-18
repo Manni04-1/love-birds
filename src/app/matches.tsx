@@ -130,7 +130,7 @@ export default function Matches() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
       <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm }}>
-        <IconButton label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/together'))}>
+        <IconButton label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace({ pathname: '/together', params: { tab: 'ideas' } }))}>
           <Glyph name="back" color={c.ink} />
         </IconButton>
         <T variant="strong" style={{ fontSize: 18 }}>
@@ -156,7 +156,7 @@ export default function Matches() {
             <Empty>
               No matches yet. Swipe right on the ideas you like. When {partner.name} likes the same one, it shows up here.
             </Empty>
-            <Button title="Go to date ideas" variant="outline" onPress={() => router.replace('/together')} />
+            <Button title="Go to date ideas" variant="outline" onPress={() => router.replace({ pathname: '/together', params: { tab: 'ideas' } })} />
           </View>
         ) : null}
         {section('Ready to plan', toPlan)}

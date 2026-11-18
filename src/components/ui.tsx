@@ -3,6 +3,8 @@ import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
 import { Fragment, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -17,8 +19,12 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { parseISODate, shortDate, timeLabel, toISODate, toTimeString } from '@/lib/dates';
-import { fontFor, radius, space, useColors } from '@/lib/theme';
+import { animalEmoji } from '@/content/animals';
+import { useSession } from '@/lib/session';
+import { fontFor, radius, space, useColors, useFontName } from '@/lib/theme';
 
 /* Text ------------------------------------------------------------------- */
 
@@ -72,9 +78,10 @@ export function T({
   ...rest
 }: TextProps & { variant?: Variant; muted?: boolean; accent?: boolean; color?: string }) {
   const c = useColors();
+  const fontName = useFontName();
   const tint = color ?? (accent || variant === 'eyebrow' ? c.accent : muted || variant === 'fine' ? c.muted : c.ink);
   const weight = (StyleSheet.flatten([textStyles[variant], style]) as TextStyle | undefined)?.fontWeight;
-  const font = fontFor(weight, DISPLAY.has(variant));
+  const font = fontFor(weight, DISPLAY.has(variant), fontName);
   return (
     <Text style={[textStyles[variant], { color: tint }, style, font]} {...rest}>
       {font.fontFamily ? withPhoneEmoji(children) : children}
@@ -218,6 +225,14 @@ const GLYPHS = {
   backspace: { ios: 'delete.left', android: 'backspace' },
   fingerprint: { ios: 'touchid', android: 'fingerprint' },
   camera: { ios: 'camera', android: 'photo_camera' },
+  play: { ios: 'play.fill', android: 'play_arrow' },
+  mail: { ios: 'envelope', android: 'mail' },
+  clock: { ios: 'clock', android: 'schedule' },
+  reply: { ios: 'arrowshape.turn.up.left', android: 'reply' },
+  edit: { ios: 'pencil', android: 'edit' },
+  trash: { ios: 'trash', android: 'delete' },
+  copy: { ios: 'doc.on.doc', android: 'content_copy' },
+  mic: { ios: 'mic.fill', android: 'mic' },
 } as const satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type GlyphName = keyof typeof GLYPHS;
@@ -307,6 +322,7 @@ export function DateField({
   onChange,
   mode = 'date',
   maximumDate,
+  minimumDate,
   placeholder = 'Choose',
 }: {
   label: string;
@@ -314,6 +330,7 @@ export function DateField({
   onChange: (value: string | null) => void;
   mode?: 'date' | 'time';
   maximumDate?: Date;
+  minimumDate?: Date;
   placeholder?: string;
 }) {
   const c = useColors();
@@ -355,6 +372,7 @@ export function DateField({
             mode={mode}
             display={Platform.OS === 'ios' ? (mode === 'date' ? 'inline' : 'spinner') : 'default'}
             maximumDate={maximumDate}
+            minimumDate={minimumDate}
             accentColor={c.accent}
             onChange={handle}
           />
@@ -367,8 +385,12 @@ export function DateField({
 
 /* People ----------------------------------------------------------------- */
 
-export function Avatar({ name, partner, size = 56 }: { name: string; partner?: boolean; size?: number }) {
+/** Your circle, or your partner's: the animal you picked, or else your initial. */
+export function Avatar({ name, partner, size = 56, animal }: { name: string; partner?: boolean; size?: number; animal?: string | null }) {
   const c = useColors();
+  const fontName = useFontName();
+  const session = useSession();
+  const emoji = animalEmoji(animal !== undefined ? animal : partner ? session.partner?.animal : session.profile?.animal);
   return (
     <View
       accessibilityLabel={name}
@@ -382,10 +404,32 @@ export function Avatar({ name, partner, size = 56 }: { name: string; partner?: b
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-      <Text style={[{ color: partner ? c.onAccent2 : c.onAccent, fontWeight: '800', fontSize: size * 0.4 }, fontFor(800, true)]}>
-        {(name.trim()[0] ?? '?').toUpperCase()}
-      </Text>
+      {emoji ? (
+        <Text style={[EMOJI_FONT, { fontSize: size * 0.52, lineHeight: size * 0.66, textAlign: 'center' }]} allowFontScaling={false}>
+          {emoji}
+        </Text>
+      ) : (
+        <Text style={[{ color: partner ? c.onAccent2 : c.onAccent, fontWeight: '800', fontSize: size * 0.4 }, fontFor(800, true, fontName)]}>
+          {(name.trim()[0] ?? '?').toUpperCase()}
+        </Text>
+      )}
     </View>
+  );
+}
+
+/** A panel that slides up from the bottom. Tap outside it to close. */
+export function Sheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+  const c = useColors();
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} accessibilityLabel="Close" />
+        <View style={{ backgroundColor: c.page, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.lg, paddingBottom: space.lg + insets.bottom, gap: space.md }}>
+          {children}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 

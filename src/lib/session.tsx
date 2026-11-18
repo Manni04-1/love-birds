@@ -49,7 +49,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       supabase.from('profiles').select('*').eq('couple_id', me.couple_id).neq('id', uid).maybeSingle(),
     ]);
     setCouple(c ?? null);
-    setPartner(p ?? null);
+    // If you've given your partner a pet name, the app uses it everywhere you see their name.
+    const nickname = (me.partner_nickname as string | null | undefined)?.trim();
+    setPartner(p ? (nickname ? { ...p, name: nickname, real_name: p.name } : p) : null);
   }, []);
 
   useEffect(() => {
