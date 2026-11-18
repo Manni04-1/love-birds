@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Button, Card, Glyph, Row, T } from '@/components/ui';
 import { LEVELS, QUIZ, unlockedLevels, WYR } from '@/content/games';
 import { quizStats, sharedHeat, useGameAnswers, wyrStats } from '@/lib/games';
+import { useRoom } from '@/lib/room';
 import { useCouple } from '@/lib/session';
 import { radius, space, tabBarInset, useColors } from '@/lib/theme';
 
@@ -37,6 +38,7 @@ export function GamesPanel() {
   const ctx = useCouple();
   const wyr = useGameAnswers('wyr');
   const quiz = useGameAnswers('quiz');
+  const room = useRoom();
   if (!ctx) return null;
   const { profile, partner } = ctx;
 
@@ -58,6 +60,13 @@ export function GamesPanel() {
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: tabBarInset + space.xl, gap: space.md }}>
+      <GameCard
+        emoji="🎮"
+        title="Play live"
+        body={`This or that, at the same moment. See how often you and ${partner.name} pick alike.`}
+        stat={room.partnerOnline ? `${partner.name} is here now. Play together!` : `Invite ${partner.name} to play`}
+        onPress={() => router.push('/live')}
+      />
       <GameCard
         emoji="🤔"
         title="Would you rather"

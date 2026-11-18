@@ -12,6 +12,16 @@ export type Profile = {
   heat?: number | null;
   /** App theme: rose, steampunk, meadow, serengeti, diani or starry. */
   theme?: string | null;
+  /** YYYY-MM-DD */
+  birthday?: string | null;
+  /** The animal that stands for you, from src/content/animals.ts. Null shows your initial. */
+  animal?: string | null;
+  /** classic, playful or handwritten. */
+  font?: string | null;
+  /** What you call your partner in the app, such as "Babe". */
+  partner_nickname?: string | null;
+  /** Set on your partner's profile only: their own name, when you've given them a pet name. */
+  real_name?: string;
 };
 
 export type Couple = {
@@ -43,6 +53,32 @@ export type Message = {
   image_path: string | null;
   hearted: boolean;
   read_at: string | null;
+  created_at: string;
+  /** The message this one answers. */
+  reply_to?: string | null;
+  /** Set when the message waits to be delivered later. */
+  deliver_at?: string | null;
+  delivered_at?: string | null;
+  edited_at?: string | null;
+  unsent_at?: string | null;
+  audio_path?: string | null;
+  audio_ms?: number | null;
+};
+
+/** One person's reaction to a message. A null emoji means it was taken back. */
+export type Reaction = { message_id: string; user_id: string; emoji: string | null; updated_at: string };
+
+/** An open-when letter. The body is null for a letter to you that you haven't opened yet. */
+export type Letter = { id: string; from_user: string; occasion: string; body: string | null; opened_at: string | null; created_at: string };
+
+export type BucketItem = {
+  id: string;
+  couple_id: string;
+  title: string;
+  emoji: string | null;
+  created_by: string;
+  done_on: string | null;
+  memory_id: string | null;
   created_at: string;
 };
 

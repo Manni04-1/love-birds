@@ -6,21 +6,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateIdeasPanel } from '@/components/date-ideas';
 import { GamesPanel } from '@/components/games-panel';
 import { Row, T } from '@/components/ui';
+import { UsPanel } from '@/components/us-panel';
 import { useCouple } from '@/lib/session';
 import { radius, space, tabBarInset, useColors } from '@/lib/theme';
 
-type Tab = 'ideas' | 'games';
+type Tab = 'us' | 'ideas' | 'games';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'ideas', label: 'Date ideas' },
+  { key: 'us', label: 'Us' },
+  { key: 'ideas', label: 'Dates' },
   { key: 'games', label: 'Games' },
 ];
+
+const isTab = (v: unknown): v is Tab => TABS.some((t) => t.key === v);
 
 export default function Together() {
   const c = useColors();
   const ctx = useCouple();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const [tab, setTab] = useState<Tab>(params.tab === 'games' ? 'games' : 'ideas');
+  const [tab, setTab] = useState<Tab>(isTab(params.tab) ? params.tab : 'us');
+  // Opening Together from a link or notification shows the part it points to.
+  const [linked, setLinked] = useState(params.tab);
+  if (params.tab !== linked) {
+    setLinked(params.tab);
+    if (isTab(params.tab)) setTab(params.tab);
+  }
   const refresh = ctx?.refresh;
 
   // Picks up your partner's latest settings, such as which question decks they've switched on.
@@ -52,7 +62,9 @@ export default function Together() {
           })}
         </Row>
       </Row>
-      {tab === 'ideas' ? (
+      {tab === 'us' ? (
+        <UsPanel />
+      ) : tab === 'ideas' ? (
         <View style={{ flex: 1, paddingBottom: tabBarInset + space.md }}>
           <DateIdeasPanel />
         </View>

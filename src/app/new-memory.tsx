@@ -15,7 +15,8 @@ export default function NewMemory() {
   const c = useColors();
   const ctx = useCouple();
   // caption, day and match come from a date you did: match marks it done.
-  const params = useLocalSearchParams<{ caption?: string; day?: string; match?: string }>();
+  // bucket comes from a bucket list dream you ticked off: the memory is linked to it.
+  const params = useLocalSearchParams<{ caption?: string; day?: string; match?: string; bucket?: string }>();
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [caption, setCaption] = useState(params.caption ?? '');
   const [day, setDay] = useState<string | null>(params.day ?? toISODate(today()));
@@ -49,6 +50,9 @@ export default function NewMemory() {
         // Best effort: the memory is saved either way.
         await supabase.from('date_matches').update({ done_on: happened_on, memory_id: data.id }).eq('couple_id', couple.id).eq('idea_id', params.match);
       }
+      if (params.bucket && data) {
+        await supabase.from('bucket_items').update({ memory_id: data.id }).eq('couple_id', couple.id).eq('id', params.bucket);
+      }
       router.back();
     } catch (e) {
       setError(friendlyError(e));
@@ -61,7 +65,7 @@ export default function NewMemory() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
-          <T variant="title">{params.match ? 'How was your date?' : 'New memory'}</T>
+          <T variant="title">{params.match ? 'How was your date?' : params.bucket ? 'You did it! 🎉' : 'New memory'}</T>
           <Pressable
             onPress={async () => {
               const p = await pickPhoto();

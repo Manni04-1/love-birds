@@ -10,6 +10,7 @@ import { AppState, Platform } from 'react-native';
 import { addDays, parseISODate, timeLabel, toISODate, today } from './dates';
 import { whileAway } from './lock';
 import { supabase } from './supabase';
+import type { SpecialDay } from './special-days';
 import type { Plan } from './types';
 
 /** The Android channel every Love Birds notification uses, with the love.wav chime. */
@@ -121,7 +122,15 @@ async function cancelScheduled(match: (identifier: string) => boolean) {
   await Promise.all(all.filter((n) => match(n.identifier)).map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)));
 }
 
-async function scheduleReminders(plans: Plan[]) {
+const SPECIAL_BODY: Record<SpecialDay['kind'], string> = {
+  anniversary: 'Happy anniversary, you two 💞',
+  birthday: 'A day to make extra special 🎉',
+  milestone: 'Another hundred days of you two. Celebrate a little today.',
+  valentine: 'Happy Valentine\'s Day, love birds 💘',
+  holiday: '',
+};
+
+async function scheduleReminders(plans: Plan[], specials: SpecialDay[]) {
   const perm = await Notifications.getPermissionsAsync();
   if (perm.status !== 'granted') return;
   await ensureChannel();
@@ -141,11 +150,25 @@ async function scheduleReminders(plans: Plan[]) {
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
     });
   }
+  // Anniversaries, birthdays and milestones: 8 AM on the day.
+  for (const s of specials) {
+    if (s.kind === 'holiday') continue;
+    const at = parseISODate(s.day);
+    at.setHours(8, 0, 0, 0);
+    if (at.getTime() < soon) continue;
+    await Notifications.scheduleNotificationAsync({
+      content: { title: `${s.emoji} ${s.title}`, body: SPECIAL_BODY[s.kind], sound: SOUND, data: { url: `/calendar?day=${s.day}` } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
+    });
+  }
 }
 
 /** Keeps reminders in step with the calendar: on open, when plans change, and when the app comes back. */
-export function useReminders(coupleId: string | undefined) {
+export function useReminders(coupleId: string | undefined, specials: SpecialDay[] = []) {
+  // Compared by content, so a new but identical list doesn't reschedule everything.
+  const specialsKey = JSON.stringify(specials);
   useEffect(() => {
+    const special = JSON.parse(specialsKey) as SpecialDay[];
     if (!coupleId || Platform.OS === 'web') return;
     let queue = Promise.resolve();
     const sync = () => {
@@ -158,7 +181,7 @@ export function useReminders(coupleId: string | undefined) {
             .gte('day', toISODate(today()))
             .order('day')
             .limit(60);
-          if (data) await scheduleReminders(data as Plan[]);
+          if (data) await scheduleReminders(data as Plan[], special);
         })
         .catch(() => {});
     };
@@ -181,7 +204,7 @@ export function useReminders(coupleId: string | undefined) {
       supabase.removeChannel(channel);
       sub.remove();
     };
-  }, [coupleId]);
+  }, [coupleId, specialsKey]);
 }
 
 // ---------------------------------------------------------------------------

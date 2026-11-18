@@ -7,7 +7,7 @@ import { levelInfo, type Level } from '@/content/games';
 import { radius, space, useColors } from '@/lib/theme';
 
 /** A back button and title. With nowhere to go back to (opened from a notification), it goes to `home`, or to the games. */
-export function BackHeader({ title, home }: { title: string; home?: '/' }) {
+export function BackHeader({ title, home }: { title: string; home?: '/' | '/chat' | '/together' }) {
   const c = useColors();
   const leave = () => {
     if (router.canGoBack()) router.back();
