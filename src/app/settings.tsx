@@ -5,6 +5,7 @@ import { Alert, Linking, Platform, Pressable, ScrollView, Switch, Text, useColor
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
+import { BackupControls } from '@/components/backup';
 import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
 import { Hero, heroInk } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
@@ -586,9 +587,15 @@ export default function Settings() {
 
         <Group label="Privacy">
           <T variant="small">
-            Only you and {partner.name} can see your calendar, chat, memories and answers. Photos are stored privately and open only inside the app, unless you save one to your phone.
+            Only you and {partner.name} can see your calendar, chat, memories and answers. Photos are stored privately and open only inside the app, unless you save one to your phone or save a backup.
           </T>
         </Group>
+
+        {Platform.OS !== 'ios' && (
+          <Group label="Backup">
+            <BackupControls coupleId={couple.id} userId={profile.id} />
+          </Group>
+        )}
 
         <Group label="App">
           <Row style={{ justifyContent: 'space-between' }}>
