@@ -1,5 +1,5 @@
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 
@@ -51,6 +51,7 @@ export function Intro() {
   const [floaters] = useState(() => FLOATERS.map(() => new Animated.Value(0)));
   const [waited, setWaited] = useState(false);
   const [gone, setGone] = useState(false);
+  const heartbeat = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     let loop: Animated.CompositeAnimation | null = null;
@@ -68,6 +69,7 @@ export function Intro() {
         // Lub-dub, rest, lub-dub.
         const pulse = (to: number, ms: number) => Animated.timing(beat, { toValue: to, duration: ms, easing: Easing.out(Easing.quad), useNativeDriver: true });
         loop = Animated.loop(Animated.sequence([pulse(1, 110), pulse(0.15, 110), pulse(0.8, 110), pulse(0, 240), Animated.delay(260)]));
+        heartbeat.current = loop;
         loop.start();
         Animated.timing(word, { toValue: 1, duration: 520, delay: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
         Animated.parallel(
@@ -87,7 +89,11 @@ export function Intro() {
   const leaving = ready && waited;
   useEffect(() => {
     if (!leaving) return;
-    Animated.timing(out, { toValue: 1, duration: 450, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => setGone(true));
+    Animated.timing(out, { toValue: 1, duration: 450, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => {
+      // This stays mounted (drawing nothing) while the app is open, so stop the heartbeat, or it would beat unseen and use battery.
+      heartbeat.current?.stop();
+      setGone(true);
+    });
   }, [leaving, out]);
 
   if (gone) return null;
