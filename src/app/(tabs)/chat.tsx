@@ -6,6 +6,7 @@ import { Animated, FlatList, KeyboardAvoidingView, PanResponder, Pressable, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
+import { useReducedMotion } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { PartnerCard } from '@/components/partner-card';
 import { Photo } from '@/components/photo';
@@ -21,7 +22,7 @@ import { pickPhoto, uploadPhoto } from '@/lib/photos';
 import { useRoom } from '@/lib/room';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
-import { radius, space, tabBarInset, useColors } from '@/lib/theme';
+import { alpha, radius, space, tabBarInset, useColors } from '@/lib/theme';
 import type { Message, Reaction } from '@/lib/types';
 import { deleteRecording, durationLabel, uploadVoiceNote } from '@/lib/voice';
 
@@ -46,6 +47,13 @@ const snippet = (m: Message | undefined) => {
 function sortMessages(list: Message[]) {
   return [...list].sort((a, b) => sentAt(b).localeCompare(sentAt(a)));
 }
+
+/** A photo message as the full-screen viewer shows it. */
+const viewerPhoto = (m: Message): ViewerPhoto => ({
+  path: m.image_path!,
+  caption: m.body,
+  note: `${dayLabel(toISODate(new Date(sentAt(m))))} · ${clockLabel(sentAt(m))}`,
+});
 
 /** Drag a message to the right to reply to it. */
 function SwipeToReply({ onReply, children }: { onReply: () => void; children: ReactNode }) {
@@ -141,6 +149,14 @@ export default function Chat() {
   const [recording, setRecording] = useState(false);
   const [sealed, setSealed] = useState(0);
   const [, setTick] = useState(0);
+  // Messages that replies quote but that are older than the ones loaded.
+  const [farQuotes, setFarQuotes] = useState<Map<string, Message>>(new Map());
+  // The message a tapped quote just scrolled to, glowing for a moment so you can spot it.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const [glow] = useState(() => new Animated.Value(0));
+  const listRef = useRef<FlatList<Message>>(null);
+  const jumpTries = useRef(0);
+  const reduced = useReducedMotion();
   const focused = useRef(false);
   const lastTap = useRef<{ id: string; at: number; timer: ReturnType<typeof setTimeout> | null }>({ id: '', at: 0, timer: null });
   const input = useRef<ComponentRef<typeof TextInput>>(null);
@@ -159,11 +175,19 @@ export default function Chat() {
       supabase.from('message_reactions').select('message_id, user_id, emoji, updated_at').eq('couple_id', coupleId).not('emoji', 'is', null),
       supabase.rpc('get_letters'),
     ]);
-    setMessages(sortMessages((msgs.data ?? []) as Message[]));
+    const loaded = (msgs.data ?? []) as Message[];
+    setMessages(sortMessages(loaded));
     const map = new Map<string, Reaction[]>();
     for (const r of (reacts.data ?? []) as Reaction[]) map.set(r.message_id, [...(map.get(r.message_id) ?? []), r]);
     setReactions(map);
     setSealed(((letters.data ?? []) as { from_user: string; opened_at: string | null }[]).filter((l) => l.from_user !== userId && !l.opened_at).length);
+    // A reply can quote a message from before the newest 200. Fetch those so the quote still shows what it answers.
+    const have = new Set(loaded.map((m) => m.id));
+    const missing = [...new Set(loaded.flatMap((m) => (m.reply_to && !have.has(m.reply_to) ? [m.reply_to] : [])))].slice(0, 50);
+    if (missing.length) {
+      const { data } = await supabase.from('messages').select('*').eq('couple_id', coupleId).in('id', missing);
+      setFarQuotes(new Map(((data ?? []) as Message[]).map((m) => [m.id, m])));
+    }
   }, [coupleId, userId]);
 
   useFocusEffect(
@@ -219,15 +243,13 @@ export default function Chat() {
   }, [coupleId, userId, markRead]);
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
-  // Redraws the messages when reactions change or a voice note starts or stops loading.
-  const listExtra = useMemo(() => ({ reactions, playingId, loadingId, failedId }), [reactions, playingId, loadingId, failedId]);
-  const photos = useMemo<ViewerPhoto[]>(
-    () =>
-      messages
-        .filter((m) => m.image_path && !m.unsent_at)
-        .map((m) => ({ path: m.image_path!, caption: m.body, note: `${dayLabel(toISODate(new Date(sentAt(m))))} · ${clockLabel(sentAt(m))}` })),
-    [messages],
+  // Redraws the messages when reactions change, a voice note starts or stops loading, an older quoted
+  // message arrives, or a message glows after a tapped quote.
+  const listExtra = useMemo(
+    () => ({ reactions, playingId, loadingId, failedId, farQuotes, flashId }),
+    [reactions, playingId, loadingId, failedId, farQuotes, flashId],
   );
+  const photos = useMemo<ViewerPhoto[]>(() => messages.filter((m) => m.image_path && !m.unsent_at).map(viewerPhoto), [messages]);
 
   if (!ctx) return null;
   const { partner, couple, profile } = ctx;
@@ -397,6 +419,30 @@ export default function Chat() {
     setTimeout(() => input.current?.focus(), 150);
   }
 
+  /** Tapping the quote on a reply shows what it answers: a photo opens, anything else is scrolled to and glows. */
+  function openQuoted(q: Message) {
+    if (q.image_path) {
+      const start = photos.findIndex((p) => p.path === q.image_path);
+      setViewer(start >= 0 ? { photos, start } : { photos: [viewerPhoto(q)], start: 0 });
+      return;
+    }
+    const index = messages.findIndex((x) => x.id === q.id);
+    if (index < 0) return;
+    jumpTries.current = 0;
+    listRef.current?.scrollToIndex({ index, animated: !reduced, viewPosition: 0.5 });
+    setFlashId(q.id);
+    glow.stopAnimation();
+    glow.setValue(0);
+    Animated.sequence([
+      Animated.delay(reduced ? 0 : 350),
+      Animated.timing(glow, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(800),
+      Animated.timing(glow, { toValue: 0, duration: 900, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) setFlashId(null);
+    });
+  }
+
   function scheduleAt(at: Date) {
     if (at.getTime() < now() + 60_000) return setError('Pick a time in the future.');
     setScheduling(false);
@@ -471,9 +517,16 @@ export default function Chat() {
       */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={-tabBarInset}>
         <FlatList
+          ref={listRef}
           inverted
           data={messages}
           keyExtractor={(m) => m.id}
+          onScrollToIndexFailed={(info) => {
+            // Messages have different heights, so one far up may not be measured yet: go near it, then try again.
+            if (jumpTries.current++ > 3) return;
+            listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+            setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: !reduced, viewPosition: 0.5 }), 120);
+          }}
           contentContainerStyle={{ padding: space.lg, gap: 6 }}
           keyboardShouldPersistTaps="handled"
           extraData={listExtra}
@@ -495,7 +548,11 @@ export default function Chat() {
             const onAccent = mine && !unsent && !isSticker;
             const textColor = look ? bubbleInk(look, dark).text : onAccent ? c.onAccent : c.ink;
             const fineColor = look ? bubbleInk(look, dark).fine : onAccent ? c.onAccent : c.muted;
-            const quoted = m.reply_to ? byId.get(m.reply_to) : undefined;
+            const quoted = m.reply_to ? (byId.get(m.reply_to) ?? farQuotes.get(m.reply_to)) : undefined;
+            const quotedWho = quoted ? (quoted.sender_id === userId ? 'You' : partner.name) : null;
+            const quotedPhoto = quoted && !quoted.unsent_at ? quoted.image_path : null;
+            // A quoted photo always opens. Anything else can be scrolled to while it's in the list.
+            const canOpenQuote = !!quoted && !quoted.unsent_at && (!!quotedPhoto || byId.has(quoted.id));
             const content = unsent ? (
               <T color={c.muted} style={{ paddingHorizontal: 14, paddingVertical: 10, fontStyle: 'italic' }}>
                 {mine ? 'You unsent a message' : `${partner.name} unsent a message`}
@@ -503,14 +560,41 @@ export default function Chat() {
             ) : (
               <>
                 {m.reply_to && (
-                  <View style={{ marginHorizontal: 8, marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, borderLeftWidth: 3, borderLeftColor: onAccent && !look ? c.onAccent : c.accent, borderRadius: 8, backgroundColor: 'rgba(127,127,127,0.15)' }}>
-                    <T variant="fine" color={fineColor} style={{ fontWeight: '700' }}>
-                      {quoted?.sender_id === userId ? 'You' : partner.name}
-                    </T>
-                    <T variant="small" color={textColor} numberOfLines={2}>
-                      {snippet(quoted)}
-                    </T>
-                  </View>
+                  <Pressable
+                    onPress={() => quoted && openQuoted(quoted)}
+                    onLongPress={() => setMenu(m)}
+                    delayLongPress={350}
+                    disabled={!canOpenQuote}
+                    accessibilityRole={canOpenQuote ? 'button' : undefined}
+                    accessibilityLabel={`In reply to ${quotedWho ?? 'a message'}: ${snippet(quoted)}`}
+                    accessibilityHint={canOpenQuote ? (quotedPhoto ? 'Opens the photo' : 'Shows that message') : undefined}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginHorizontal: 8,
+                      marginTop: 8,
+                      paddingLeft: 10,
+                      paddingRight: quotedPhoto ? 6 : 10,
+                      paddingVertical: 6,
+                      borderLeftWidth: 3,
+                      borderLeftColor: onAccent && !look ? c.onAccent : c.accent,
+                      borderRadius: 8,
+                      backgroundColor: 'rgba(127,127,127,0.15)',
+                      opacity: pressed ? 0.7 : 1,
+                    })}>
+                    <View style={{ flexGrow: 1, flexShrink: 1 }}>
+                      {quotedWho ? (
+                        <T variant="fine" color={fineColor} style={{ fontWeight: '700' }}>
+                          {quotedWho}
+                        </T>
+                      ) : null}
+                      <T variant="small" color={textColor} numberOfLines={2}>
+                        {snippet(quoted)}
+                      </T>
+                    </View>
+                    {quotedPhoto ? <Photo path={quotedPhoto} label="The photo this replies to" style={{ width: 44, height: 44, borderRadius: 6 }} /> : null}
+                  </Pressable>
                 )}
                 {m.image_path && <Photo path={m.image_path} style={{ width: 220, height: 220, borderRadius: radius.md }} />}
                 {isSticker && (
@@ -538,62 +622,70 @@ export default function Chat() {
                     {dayLabel(day)}
                   </T>
                 )}
-                <SwipeToReply onReply={() => !unsent && startReply(m)}>
-                  <View style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '80%', alignItems: mine ? 'flex-end' : 'flex-start', opacity: pending ? 0.7 : 1 }}>
-                    <Pressable
-                      onPress={() => tap(m)}
-                      onLongPress={() => !unsent && setMenu(m)}
-                      delayLongPress={350}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${snippet(m)}. Double tap to ${m.hearted ? 'remove the heart' : 'send a heart'}. Hold for more.`}
-                      style={
-                        look || isSticker
-                          ? undefined
-                          : {
-                              backgroundColor: unsent ? 'transparent' : mine ? c.accent : c.surface,
-                              borderColor: unsent ? c.line : mine ? c.accent : c.line,
-                              borderStyle: unsent ? 'dashed' : 'solid',
-                              borderWidth: 1,
-                              borderRadius: radius.lg,
-                              borderBottomRightRadius: mine ? 6 : radius.lg,
-                              borderBottomLeftRadius: mine ? radius.lg : 6,
-                              padding: m.image_path ? 4 : 0,
-                              overflow: 'hidden',
-                            }
-                      }>
-                      {look ? (
-                        <LoveBubble look={look} mine={mine}>
-                          <View style={{ padding: m.image_path ? 4 : 0 }}>{content}</View>
-                        </LoveBubble>
-                      ) : (
-                        content
-                      )}
-                    </Pressable>
-                    {(m.hearted || list.length > 0) && (
-                      <Row gap={4} style={{ marginTop: -8, marginHorizontal: 8 }}>
-                        {m.hearted && (
-                          <View style={{ backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Glyph name="heart" color={c.accent} size={12} />
-                          </View>
+                <View>
+                  {m.id === flashId && (
+                    <Animated.View
+                      pointerEvents="none"
+                      style={{ position: 'absolute', left: -space.lg, right: -space.lg, top: -4, bottom: -4, backgroundColor: alpha(c.accent, dark ? 0.26 : 0.18), opacity: glow }}
+                    />
+                  )}
+                  <SwipeToReply onReply={() => !unsent && startReply(m)}>
+                    <View style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '80%', alignItems: mine ? 'flex-end' : 'flex-start', opacity: pending ? 0.7 : 1 }}>
+                      <Pressable
+                        onPress={() => tap(m)}
+                        onLongPress={() => !unsent && setMenu(m)}
+                        delayLongPress={350}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${snippet(m)}. Double tap to ${m.hearted ? 'remove the heart' : 'send a heart'}. Hold for more.`}
+                        style={
+                          look || isSticker
+                            ? undefined
+                            : {
+                                backgroundColor: unsent ? 'transparent' : mine ? c.accent : c.surface,
+                                borderColor: unsent ? c.line : mine ? c.accent : c.line,
+                                borderStyle: unsent ? 'dashed' : 'solid',
+                                borderWidth: 1,
+                                borderRadius: radius.lg,
+                                borderBottomRightRadius: mine ? 6 : radius.lg,
+                                borderBottomLeftRadius: mine ? radius.lg : 6,
+                                padding: m.image_path ? 4 : 0,
+                                overflow: 'hidden',
+                              }
+                        }>
+                        {look ? (
+                          <LoveBubble look={look} mine={mine}>
+                            <View style={{ padding: m.image_path ? 4 : 0 }}>{content}</View>
+                          </LoveBubble>
+                        ) : (
+                          content
                         )}
-                        {list.map((r) => (
-                          <Pressable
-                            key={r.user_id}
-                            onPress={() => r.user_id === userId && react(m, null)}
-                            accessibilityLabel={`${r.user_id === userId ? 'You' : partner.name} reacted ${r.emoji}`}
-                            style={{ backgroundColor: r.user_id === userId ? c.accentSoft : c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 1 }}>
-                            <T style={{ fontSize: 13, lineHeight: 17 }}>{r.emoji}</T>
-                          </Pressable>
-                        ))}
-                      </Row>
-                    )}
-                    <T variant="fine" style={{ marginHorizontal: 6, marginTop: 2 }}>
-                      {pending ? `🕒 Sends ${whenLabel(m.deliver_at!)}` : clockLabel(sentAt(m))}
-                      {m.edited_at && !unsent ? ' · edited' : ''}
-                      {mine && !pending && m.id === lastMineId ? (m.read_at ? ' · Seen' : ' · Sent') : ''}
-                    </T>
-                  </View>
-                </SwipeToReply>
+                      </Pressable>
+                      {(m.hearted || list.length > 0) && (
+                        <Row gap={4} style={{ marginTop: -8, marginHorizontal: 8 }}>
+                          {m.hearted && (
+                            <View style={{ backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Glyph name="heart" color={c.accent} size={12} />
+                            </View>
+                          )}
+                          {list.map((r) => (
+                            <Pressable
+                              key={r.user_id}
+                              onPress={() => r.user_id === userId && react(m, null)}
+                              accessibilityLabel={`${r.user_id === userId ? 'You' : partner.name} reacted ${r.emoji}`}
+                              style={{ backgroundColor: r.user_id === userId ? c.accentSoft : c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 1 }}>
+                              <T style={{ fontSize: 13, lineHeight: 17 }}>{r.emoji}</T>
+                            </Pressable>
+                          ))}
+                        </Row>
+                      )}
+                      <T variant="fine" style={{ marginHorizontal: 6, marginTop: 2 }}>
+                        {pending ? `🕒 Sends ${whenLabel(m.deliver_at!)}` : clockLabel(sentAt(m))}
+                        {m.edited_at && !unsent ? ' · edited' : ''}
+                        {mine && !pending && m.id === lastMineId ? (m.read_at ? ' · Seen' : ' · Sent') : ''}
+                      </T>
+                    </View>
+                  </SwipeToReply>
+                </View>
               </View>
             );
           }}
@@ -619,6 +711,9 @@ export default function Chat() {
                 {snippet(editing ?? replyTo ?? undefined)}
               </T>
             </View>
+            {!editing && replyTo?.image_path ? (
+              <Photo path={replyTo.image_path} label="The photo you're replying to" style={{ width: 40, height: 40, borderRadius: 6 }} />
+            ) : null}
             <IconButton
               label="Cancel"
               onPress={() => {
