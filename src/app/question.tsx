@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { Avatar, Button, Card, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { clockLabel, dayLabel, today } from '@/lib/dates';
 import { useQuestions } from '@/lib/questions';
@@ -73,6 +74,7 @@ export default function QuestionScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm }}>
           <IconButton label="Back" onPress={() => router.back()}>

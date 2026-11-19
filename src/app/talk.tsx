@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { Button, Glyph, Row, T } from '@/components/ui';
 import { LEVELS, levelInfo, TALK, unlockedLevels, type Level } from '@/content/games';
@@ -41,6 +42,7 @@ export default function Talk() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title={`${info.emoji} ${info.label} talk deck`} />
       {!open ? (
         <View style={{ flex: 1, padding: space.xl, justifyContent: 'center', gap: space.md }}>

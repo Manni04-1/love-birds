@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { Alert, Animated, AppState, BackHandler, Modal, Pressable, StyleSheet, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { LoveBirdsMark } from '@/components/mark';
 import { Glyph, Row, T } from '@/components/ui';
 import {
@@ -287,6 +288,7 @@ export function PinSetup({ task, onClose }: { task: PinTask | null; onClose: () 
   return (
     <Modal visible={!!task} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: c.page, padding: space.lg, gap: space.xl }}>
+        <ThemeBackdrop />
         <Row style={{ justifyContent: 'flex-end' }}>
           <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Cancel" hitSlop={10} style={{ padding: space.sm }}>
             <T variant="strong" accent>

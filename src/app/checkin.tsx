@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { Avatar, Button, Card, ErrorText, Field, Glyph, Row, T } from '@/components/ui';
 import { saveCheckin, useCheckins, type Checkin } from '@/lib/daily';
@@ -78,6 +79,7 @@ export default function CheckinScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <BackHeader title="Rose, thorn and bud" home="/" />
         <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled">

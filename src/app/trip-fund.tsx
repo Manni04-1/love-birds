@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { FloatingHearts } from '@/components/floating-hearts';
 import { BackHeader } from '@/components/game-ui';
 import { Button, Card, Chip, ErrorText, Field, Glyph, ProgressBar, Row, Sheet, T } from '@/components/ui';
@@ -216,6 +217,7 @@ export default function TripFund() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Trip fund" home="/together" />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, gap: space.lg, paddingBottom: space.xxl }}>
         <T variant="small" muted>

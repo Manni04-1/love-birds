@@ -3,10 +3,12 @@ import { useCallback, useState } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { Critters } from '@/components/critters';
 import { GestureCard, MoodPicker, MoodRow, NudgeButton, NudgeToast, TilePhoto, TodayTile } from '@/components/daily';
 import { HeartShape, Hero, heroInk, usePulse, useReducedMotion } from '@/components/hero';
 import { HomeSafeCard } from '@/components/home-safe';
+import { PartnerCard } from '@/components/partner-card';
 import { Photo } from '@/components/photo';
 import { Avatar, Button, Card, DateField, Glyph, Row, T } from '@/components/ui';
 import { gestureFor } from '@/content/gestures';
@@ -83,6 +85,7 @@ export default function Home() {
   const nudges = useNudges(coupleId, userId, () => setPing((p) => p + 1));
   const gesture = useGestureDone();
   const [moodOpen, setMoodOpen] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
   const [next, setNext] = useState<Occurrence | null>(null);
   const [latest, setLatest] = useState<Memory | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -166,6 +169,7 @@ export default function Home() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <NudgeToast name={partner.name} ping={ping} />
       <ScrollView
         contentContainerStyle={{ padding: space.lg, paddingBottom: tabBarInset + space.xl, gap: space.md }}
@@ -212,7 +216,9 @@ export default function Home() {
               <Row gap={0}>
                 <Avatar name={profile.name} size={52} />
                 <Heartbeat color={heart} />
-                <Avatar name={partner.name} partner size={52} />
+                <Pressable onPress={() => setCardOpen(true)} accessibilityRole="button" accessibilityLabel={`Open ${partner.name}'s profile`} hitSlop={6}>
+                  <Avatar name={partner.name} partner size={52} />
+                </Pressable>
               </Row>
               {together ? (
                 <>
@@ -381,6 +387,7 @@ export default function Home() {
           await reloadMoods();
         }}
       />
+      <PartnerCard open={cardOpen} onClose={() => setCardOpen(false)} onNudge={nudges.send} />
     </SafeAreaView>
   );
 }

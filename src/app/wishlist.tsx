@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Linking, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader, Pill } from '@/components/game-ui';
 import { Button, Card, Empty, ErrorText, Field, Glyph, Row, Sheet, T } from '@/components/ui';
 import { addDays, daysBetween, parseISODate, shortDate, toISODate, today } from '@/lib/dates';
@@ -192,6 +193,7 @@ export default function Wishlist() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Wishlists" home="/together" />
       <Row gap={0} style={{ marginHorizontal: space.lg, backgroundColor: c.surface2, borderRadius: radius.pill, padding: 3 }}>
         {(

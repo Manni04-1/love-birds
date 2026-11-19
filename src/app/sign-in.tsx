@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { Button, Card, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { space, useColors } from '@/lib/theme';
@@ -49,6 +50,7 @@ export default function SignIn() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm }}>
           <IconButton label="Back" onPress={() => router.back()}>

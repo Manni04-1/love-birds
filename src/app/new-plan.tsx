@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { Button, Chip, DateField, ErrorText, Field, Row, T } from '@/components/ui';
 import { addDays, daysBetween, parseISODate, toISODate, today } from '@/lib/dates';
 import { isRepeat, longestSpan, REPEATS, span, type Repeat } from '@/lib/plans';
@@ -111,6 +112,7 @@ export default function NewPlan() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {!loaded ? (
           <ActivityIndicator color={c.accent} style={{ marginTop: space.xxl }} />

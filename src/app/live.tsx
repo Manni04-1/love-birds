@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { FloatingHearts } from '@/components/floating-hearts';
 import { BackHeader, Panel } from '@/components/game-ui';
 import { LiesGame, PickGame, TodGame, type GameProps, type SavedRound } from '@/components/live-games';
@@ -148,6 +149,7 @@ export default function Live() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <BackHeader title="Play live" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, gap: space.lg }} keyboardShouldPersistTaps="handled">

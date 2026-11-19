@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { Button, DateField, ErrorText, Field, Glyph, Row, T } from '@/components/ui';
 import { toISODate, today } from '@/lib/dates';
 import { pickPhoto, uploadPhoto, type PickedPhoto } from '@/lib/photos';
@@ -63,6 +64,7 @@ export default function NewMemory() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
           <T variant="title">{params.match ? 'How was your date?' : params.bucket ? 'You did it! 🎉' : 'New memory'}</T>

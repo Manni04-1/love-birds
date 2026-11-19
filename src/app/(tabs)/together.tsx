@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { DateIdeasPanel } from '@/components/date-ideas';
 import { GamesPanel } from '@/components/games-panel';
 import { Row, T } from '@/components/ui';
@@ -42,6 +43,7 @@ export default function Together() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <Row style={{ paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.md, justifyContent: 'space-between' }}>
         <T variant="title">Together</T>
         <Row gap={0} style={{ backgroundColor: c.surface2, borderRadius: radius.pill, padding: 3 }}>

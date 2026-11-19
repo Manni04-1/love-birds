@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeBackdrop } from '@/components/backdrop';
 import { BackHeader } from '@/components/game-ui';
 import { Photo } from '@/components/photo';
 import { Avatar, Button, ErrorText, Field, Glyph, Row, T } from '@/components/ui';
@@ -94,6 +95,7 @@ export default function PhotoOfTheDay() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.page }}>
+      <ThemeBackdrop />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <BackHeader title="Photo of the day" home="/" />
         <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }} keyboardShouldPersistTaps="handled">
