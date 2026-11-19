@@ -47,7 +47,7 @@ function Tabs() {
     () => specialDays(today(), addDays(today(), 60), { togetherSince: together, myBirthday: mine, partnerBirthday: theirs, partnerName: name, story: milestones }),
     [together, mine, theirs, name, milestones],
   );
-  useNotificationSetup(ctx?.userId);
+  useNotificationSetup(ctx?.userId, ctx?.profile.chime);
   useReminders(ctx?.couple.id, specials);
   useNotificationTaps();
   // Anything a widget shows: when one of these changes, the widgets draw again.

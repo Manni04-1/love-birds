@@ -243,6 +243,9 @@ const GLYPHS = {
   trip: { ios: 'suitcase', android: 'luggage' },
   repeat: { ios: 'repeat', android: 'repeat' },
   today: { ios: 'calendar', android: 'today' },
+  vibrate: { ios: 'iphone.radiowaves.left.and.right', android: 'vibration' },
+  phone: { ios: 'iphone', android: 'smartphone' },
+  bell: { ios: 'bell', android: 'notifications' },
 } as const satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type GlyphName = keyof typeof GLYPHS;

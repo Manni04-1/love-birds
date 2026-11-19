@@ -6,14 +6,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
 import { BackupControls } from '@/components/backup';
+import { ChimePicker } from '@/components/chime-picker';
 import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
 import { Hero, heroInk } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { Avatar, Button, Chip, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
 import { today } from '@/lib/dates';
 import { sharedHeat } from '@/lib/games';
+import { chimeFor, chimeInfo, type ChimeKey } from '@/lib/chimes';
 import { biometricsAvailable, lockSupported, setBiometrics, setLockAfter, type LockAfter } from '@/lib/lock';
-import { enableNotifications, eveningReminderOn, setEveningReminder, type NotificationStatus } from '@/lib/notifications';
+import { changeChime, enableNotifications, eveningReminderOn, setEveningReminder, type NotificationStatus } from '@/lib/notifications';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import type { BubbleStyle } from '@/lib/types';
@@ -132,7 +134,7 @@ const HEATS: { heat: number; label: string; note: string }[] = [
 const SHARED_TEXT = ['Nothing extra is on for you both yet.', 'On for you both: Flirty.', 'On for you both: Flirty and Erotic.'];
 
 const STATUS_TEXT: Record<NotificationStatus, string> = {
-  on: 'On. You\'ll hear the love chime for messages, plans, memories and answers, and get a reminder an hour before each plan.',
+  on: 'On. You\'ll hear your chime for messages, plans, memories and answers, and get a reminder an hour before each plan.',
   'reminders-only': 'Plan reminders work, but messages from your partner can\'t reach this phone yet.',
   off: 'Off. Turn them on so you know when your partner writes.',
   blocked: 'Turned off in your phone\'s settings. Open them, tap Notifications and switch them on.',
@@ -151,6 +153,7 @@ export default function Settings() {
   const [notif, setNotif] = useState<NotificationStatus | null>(null);
   const [notifNote, setNotifNote] = useState('');
   const [evening, setEvening] = useState(true);
+  const [choosingChime, setChoosingChime] = useState(false);
   const [themeError, setThemeError] = useState('');
   const { settings: lock, reload: reloadLock } = useAppLock();
   const [pinTask, setPinTask] = useState<PinTask | null>(null);
@@ -243,6 +246,17 @@ export default function Settings() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Yes, switch on', onPress: () => saveHeat(heat) },
     ]);
+  }
+
+  /** Saves the chime this phone plays. Returns an error to show in the picker, or ''. */
+  async function pickChime(key: ChimeKey): Promise<string> {
+    setNotifNote('');
+    const err = await changeChime(profile.id, key);
+    if (err) return friendlyError(err);
+    const name = chimeInfo(key).label;
+    setNotifNote(notif === 'on' ? `${name} it is. Tap Send me a test to hear it as a notification.` : `${name} it is.`);
+    await refresh();
+    return '';
   }
 
   async function turnOnNotifications() {
@@ -459,6 +473,17 @@ export default function Settings() {
             <Button title={notif === 'blocked' ? 'Open phone settings' : 'Turn on notifications'} onPress={turnOnNotifications} />
           )}
           {notifNote ? <T variant="small" muted>{notifNote}</T> : null}
+          {Platform.OS !== 'ios' && (
+            <Row style={{ justifyContent: 'space-between' }}>
+              <View style={{ flex: 1 }}>
+                <T variant="strong">Chime</T>
+                <T variant="small" muted>
+                  {chimeInfo(chimeFor(profile.chime)).label}. You each pick the one your own phone plays.
+                </T>
+              </View>
+              <Button title="Change" variant="outline" onPress={() => setChoosingChime(true)} />
+            </Row>
+          )}
           <Row style={{ justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
               <T variant="strong">Evening reminder</T>
@@ -627,6 +652,7 @@ export default function Settings() {
         </Group>
       </ScrollView>
       <PinSetup task={pinTask} onClose={() => setPinTask(null)} />
+      <ChimePicker open={choosingChime} current={chimeFor(profile.chime)} onUse={pickChime} onClose={() => setChoosingChime(false)} />
     </SafeAreaView>
   );
 }

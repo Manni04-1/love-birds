@@ -3,7 +3,7 @@
     "name": "Love Birds",
     "slug": "love-birds",
     "owner": "manni04-1",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lovebirds",
@@ -62,7 +62,22 @@
           "color": "#E0218A",
           "defaultChannel": "love",
           "sounds": [
-            "./assets/sounds/love.wav"
+            "./assets/sounds/love.wav",
+            "./assets/sounds/birdsong.mp3",
+            "./assets/sounds/music_box.mp3",
+            "./assets/sounds/harp.mp3",
+            "./assets/sounds/kalimba.mp3",
+            "./assets/sounds/marimba.mp3",
+            "./assets/sounds/steel_pan.mp3",
+            "./assets/sounds/piano.mp3",
+            "./assets/sounds/ukulele.mp3",
+            "./assets/sounds/wind_chimes.mp3",
+            "./assets/sounds/crystal.mp3",
+            "./assets/sounds/sparkle.mp3",
+            "./assets/sounds/doorbell.mp3",
+            "./assets/sounds/bubbles.mp3",
+            "./assets/sounds/whistle.mp3",
+            "./assets/sounds/heartbeat.mp3"
           ]
         }
       ],
