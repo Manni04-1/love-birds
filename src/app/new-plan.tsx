@@ -1,11 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, ScrollView, Switch, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
-import { Button, Chip, DateField, ErrorText, Field, Row, T } from '@/components/ui';
+import { IconPicker, PlanIconView } from '@/components/plan-icon';
+import { Button, Chip, DateField, ErrorText, Field, Glyph, Row, T } from '@/components/ui';
 import { addDays, daysBetween, parseISODate, toISODate, today } from '@/lib/dates';
+import { autoIcon, followsName, iconFor, type PlanIcon } from '@/lib/plan-icons';
 import { isRepeat, longestSpan, REPEATS, span, type Repeat } from '@/lib/plans';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
@@ -28,6 +30,9 @@ export default function NewPlan() {
   const [until, setUntil] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [remind, setRemind] = useState(true);
+  // The icon you picked. Null while it follows the name, as a guess from it.
+  const [picked, setPicked] = useState<PlanIcon | null>(null);
+  const [picking, setPicking] = useState(false);
   // The plan being changed already lasts several days or repeats, so those can be switched off.
   const [had, setHad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,6 +60,7 @@ export default function NewPlan() {
           setUntil(p.repeat_until ?? null);
           setNote(p.note ?? '');
           setRemind(p.remind);
+          setPicked(followsName(p) ? null : iconFor(p));
           setHad(!!p.end_day || !!p.repeats);
         }
         setLoaded(true);
@@ -67,6 +73,8 @@ export default function NewPlan() {
   if (!ctx) return null;
   const { couple, partner } = ctx;
   const days = day && endDay && endDay > day ? daysBetween(parseISODate(day), parseISODate(endDay)) : 0;
+  const fromName = autoIcon(title, days > 0);
+  const icon = picked ?? fromName;
 
   async function save() {
     setError('');
@@ -87,17 +95,19 @@ export default function NewPlan() {
       ...(days > 0 || had ? { end_day: days > 0 ? endDay : null } : {}),
       ...(repeats || had ? { repeats, repeat_until: repeats ? until : null } : {}),
     };
+    // Saved even when it follows the name, so notifications and widgets can show it.
+    const withIcon = { ...row, emoji: icon.emoji, glyph: icon.glyph };
     if (editing) {
-      const { error: err } = await supabase.from('events').update(row).eq('id', params.id!);
+      let { error: err } = await supabase.from('events').update(withIcon).eq('id', params.id!);
+      if (noIconYet(err)) ({ error: err } = await supabase.from('events').update(row).eq('id', params.id!));
       setBusy(false);
       if (err) return setError(friendlyError(err));
       return router.back();
     }
-    const { data, error: err } = await supabase
-      .from('events')
-      .insert({ ...row, couple_id: couple.id })
-      .select('id')
-      .single();
+    const add = (r: typeof row) => supabase.from('events').insert({ ...r, couple_id: couple.id }).select('id').single();
+    let added = await add(withIcon);
+    if (noIconYet(added.error)) added = await add(row);
+    const { data, error: err } = added;
     if (!err && params.match && data) {
       // Best effort: the plan is saved either way.
       await supabase.from('date_matches').update({ event_id: data.id }).eq('couple_id', couple.id).eq('idea_id', params.match);
@@ -119,7 +129,38 @@ export default function NewPlan() {
         ) : (
           <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }} keyboardShouldPersistTaps="handled">
             <T variant="title">{editing ? 'Change plan' : params.match ? 'Plan your date' : 'New plan'}</T>
-            <Field label="What" value={title} onChangeText={setTitle} placeholder="e.g. Picnic in the park" maxLength={120} autoFocus={!editing} />
+            <View style={{ gap: 6 }}>
+              <Row gap={space.md} style={{ alignItems: 'flex-end' }}>
+                <Pressable
+                  onPress={() => setPicking(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change the icon"
+                  hitSlop={4}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}>
+                  <PlanIconView icon={icon} size={50} tint={c.accent} />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      right: -3,
+                      bottom: -3,
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: c.accent,
+                      borderWidth: 2,
+                      borderColor: c.page,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                    <Glyph name="edit" color={c.onAccent} size={12} />
+                  </View>
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Field label="What" value={title} onChangeText={setTitle} placeholder="e.g. Picnic in the park" maxLength={120} autoFocus={!editing} />
+                </View>
+              </Row>
+              <T variant="fine">{picked ? 'Tap the icon to change it.' : 'The icon comes from the name. Tap it to pick your own.'}</T>
+            </View>
             <Row style={{ alignItems: 'flex-start' }}>
               <DateField
                 label={days > 0 ? 'Starts' : 'Date'}
@@ -195,6 +236,12 @@ export default function NewPlan() {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
+      <IconPicker open={picking} icon={icon} fromName={fromName} followsName={!picked} onPick={setPicked} onClose={() => setPicking(false)} />
     </SafeAreaView>
   );
+}
+
+/** True when the plan couldn't be saved only because plan-icons.sql hasn't run yet, so it can be saved without its icon. */
+function noIconYet(err: { code?: string; message?: string } | null): boolean {
+  return !!err && err.code === 'PGRST204' && /emoji|glyph/.test(err.message ?? '');
 }

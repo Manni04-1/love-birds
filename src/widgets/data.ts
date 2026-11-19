@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { addDays, toISODate, today } from '@/lib/dates';
+import { iconFor } from '@/lib/plan-icons';
 import { loadPlans, upcoming } from '@/lib/plans';
 import { supabase } from '@/lib/supabase';
 
@@ -20,7 +21,7 @@ export type WidgetData = {
   /** Your partner's mood and the day they shared it. */
   mood: { day: string; emoji: string; word: string | null } | null;
   /** The next few times plans come round, soonest first (YYYY-MM-DD, time as HH:MM:SS). */
-  plans: { title: string; start: string; end: string; time: string | null }[];
+  plans: { title: string; start: string; end: string; time: string | null; emoji?: string }[];
   theme: string;
   /** Private notifications are on, so the widgets leave out words someone else could read. */
   hidden: boolean;
@@ -101,7 +102,7 @@ export async function fetchWidgetData(): Promise<WidgetData | null> {
     partnerAnimal: partner.data?.animal ?? null,
     together: couple.data?.together_since ?? null,
     mood: mood.data?.emoji ? { day: mood.data.day, emoji: mood.data.emoji, word: mood.data.word ?? null } : null,
-    plans: upcoming(plans, day, 3).map((o) => ({ title: o.plan.title, start: o.start, end: o.end, time: o.plan.time })),
+    plans: upcoming(plans, day, 3).map((o) => ({ title: o.plan.title, start: o.start, end: o.end, time: o.plan.time, emoji: iconFor(o.plan).emoji })),
     theme: me.theme ?? 'rose',
     hidden: !!me.private_notifications,
   };

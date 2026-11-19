@@ -10,10 +10,12 @@ import { HeartShape, Hero, heroInk, usePulse, useReducedMotion } from '@/compone
 import { HomeSafeCard } from '@/components/home-safe';
 import { PartnerCard } from '@/components/partner-card';
 import { Photo } from '@/components/photo';
+import { PlanIconView } from '@/components/plan-icon';
 import { Avatar, Button, Card, DateField, Glyph, Row, T } from '@/components/ui';
 import { gestureFor } from '@/content/gestures';
 import { saveMood, useCheckins, useDailyPhotos, useGestureDone, useMoods, useNudges } from '@/lib/daily';
 import { dayLabel, dayNumber, daysBetween, greeting, longDate, parseISODate, shortDate, timeLabel, toISODate, today } from '@/lib/dates';
+import { iconFor } from '@/lib/plan-icons';
 import { dayOf, isRepeat, loadUpcoming, rangeLabel, repeatLabel, type Occurrence } from '@/lib/plans';
 import { useQuestions } from '@/lib/questions';
 import { monthKey, shiftMonth } from '@/lib/recap';
@@ -324,7 +326,12 @@ export default function Home() {
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <T variant="eyebrow">{countdown(next)}</T>
-                <T variant="strong">{next.plan.title}</T>
+                <Row gap={6} style={{ alignItems: 'flex-start' }}>
+                  <PlanIconView icon={iconFor(next.plan)} size={21} />
+                  <T variant="strong" style={{ flex: 1 }}>
+                    {next.plan.title}
+                  </T>
+                </Row>
                 <T variant="small" muted>
                   {whenLabel(next)}
                 </T>

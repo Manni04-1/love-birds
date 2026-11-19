@@ -7,9 +7,11 @@ import { ThemeBackdrop } from '@/components/backdrop';
 import { Hero, heroInk } from '@/components/hero';
 import { Photo } from '@/components/photo';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
+import { PlanIconView } from '@/components/plan-icon';
 import { Avatar, Button, Empty, ErrorText, Glyph, IconButton, Row, Sheet, T } from '@/components/ui';
 import { addDays, dayLabel, daysBetween, monthLabel, parseISODate, timeLabel, toISODate, today } from '@/lib/dates';
 import { hashRank } from '@/lib/games';
+import { iconFor, type PlanIcon } from '@/lib/plan-icons';
 import { hasMoments, ideaFor, loadFreeDays, loadMoments, setFree, type DayMoments, type FreeDay, type IdeaPick } from '@/lib/our-days';
 import { dayOf, isRepeat, loadPlans, loadUpcoming, plansByDay, rangeLabel, repeatLabel, type Occurrence } from '@/lib/plans';
 import { loadQuestions } from '@/lib/questions';
@@ -22,7 +24,7 @@ import type { Plan, Question } from '@/lib/types';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-type Next = { day: string; title: string; emoji: string; kind: 'plan' | 'special'; end?: string };
+type Next = { day: string; title: string; emoji: string; kind: 'plan' | 'special'; end?: string; icon?: PlanIcon };
 
 /** A soft shadow under a card, deeper on a dark page. */
 function lift(c: Colors, dark: boolean, y = 6): string {
@@ -55,9 +57,21 @@ function Countdown({ next, onPress }: { next: Next | null; onPress: () => void }
             <T variant="eyebrow" color={ink.soft} style={shadow}>
               {next ? (next.kind === 'plan' ? 'Next plan' : 'Coming up') : 'Nothing planned yet'}
             </T>
-            <T variant="heading" color={ink.ink} style={shadow} numberOfLines={2}>
-              {next ? `${next.emoji} ${next.title}` : 'Tap to plan something together'}
-            </T>
+            {next?.icon?.glyph ? (
+              // A drawn icon can't sit in the words, so it goes beside them.
+              <Row gap={6} style={{ alignItems: 'flex-start' }}>
+                <View style={{ paddingTop: 3 }}>
+                  <PlanIconView icon={next.icon} size={22} color={ink.ink} />
+                </View>
+                <T variant="heading" color={ink.ink} style={[shadow, { flex: 1 }]} numberOfLines={2}>
+                  {next.title}
+                </T>
+              </Row>
+            ) : (
+              <T variant="heading" color={ink.ink} style={shadow} numberOfLines={2}>
+                {next ? `${next.emoji} ${next.title}` : 'Tap to plan something together'}
+              </T>
+            )}
             {next ? (
               <T variant="small" color={ink.soft} style={shadow}>
                 {next.end ? rangeLabel({ start: next.day, end: next.end }) : dayLabel(next.day)}
@@ -431,9 +445,11 @@ export default function Calendar() {
   const page = dateParts(parseISODate(selected));
 
   const soonest = upcoming[0];
-  const nextPlan: Next | null = soonest
-    ? { day: soonest.start, title: soonest.plan.title, emoji: soonest.end > soonest.start ? '🧳' : '📅', kind: 'plan', end: soonest.end > soonest.start ? soonest.end : undefined }
-    : null;
+  const soonestIcon = soonest ? iconFor(soonest.plan) : null;
+  const nextPlan: Next | null =
+    soonest && soonestIcon
+      ? { day: soonest.start, title: soonest.plan.title, emoji: soonestIcon.emoji, icon: soonestIcon, kind: 'plan', end: soonest.end > soonest.start ? soonest.end : undefined }
+      : null;
   const nextSpecial: Next | null = soonSpecial ? { day: soonSpecial.day, title: soonSpecial.title, emoji: soonSpecial.emoji, kind: 'special' } : null;
   const next = nextPlan && nextSpecial ? (nextSpecial.day < nextPlan.day && !nextPlan.end ? nextSpecial : nextPlan) : (nextPlan ?? nextSpecial);
 
@@ -541,7 +557,7 @@ export default function Calendar() {
               </>
             ) : (
               <>
-                <T style={{ fontSize: 22, lineHeight: 28 }}>{several ? '🧳' : repeats ? '🔁' : '📅'}</T>
+                <Glyph name={several ? 'trip' : repeats ? 'repeat' : 'today'} color={onTint} size={24} />
                 <T variant="eyebrow" color={onTint} style={{ fontSize: 10, opacity: 0.85 }}>
                   All day
                 </T>
@@ -564,36 +580,39 @@ export default function Calendar() {
         {/* The notches where a ticket tears off. */}
         <View style={[notch, { top: -8 }]} />
         <View style={[notch, { bottom: -8 }]} />
-        <View style={{ flex: 1, paddingVertical: space.md, paddingHorizontal: space.md, gap: 3 }}>
-          <Row gap={space.sm} style={{ alignItems: 'flex-start' }}>
-            <T variant="strong" style={{ flex: 1 }}>
-              {p.title}
-            </T>
+        <View style={{ flex: 1, flexDirection: 'row', paddingVertical: space.md, paddingHorizontal: space.md, gap: space.sm + 2 }}>
+          <PlanIconView icon={iconFor(p)} size={36} tint={tint} />
+          <View style={{ flex: 1, gap: 3 }}>
+            <Row gap={space.sm} style={{ alignItems: 'flex-start' }}>
+              <T variant="strong" style={{ flex: 1 }}>
+                {p.title}
+              </T>
+              {!day && (
+                <View style={{ paddingHorizontal: 9, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: alpha(tint, dark ? 0.24 : 0.16) }}>
+                  <T variant="fine" color={deep} style={{ fontWeight: '800' }}>
+                    {soon}
+                  </T>
+                </View>
+              )}
+            </Row>
             {!day && (
-              <View style={{ paddingHorizontal: 9, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: alpha(tint, dark ? 0.24 : 0.16) }}>
-                <T variant="fine" color={deep} style={{ fontWeight: '800' }}>
-                  {soon}
-                </T>
-              </View>
+              <T variant="small" muted>
+                {time}
+              </T>
             )}
-          </Row>
-          {!day && (
-            <T variant="small" muted>
-              {time}
-            </T>
-          )}
-          {several && (
-            <T variant="small" color={deep} style={{ fontWeight: '700' }}>
-              {day ? `${dayOf(o, day)} · ${rangeLabel(o)}` : rangeLabel(o)}
-            </T>
-          )}
-          {repeats && (
-            <T variant="small" muted>
-              🔁 {repeatLabel(p)}
-            </T>
-          )}
-          {p.note ? <T variant="small" muted>{p.note}</T> : null}
-          <T variant="fine">{p.created_by === userId ? 'Added by you' : `Added by ${partner.name}`}</T>
+            {several && (
+              <T variant="small" color={deep} style={{ fontWeight: '700' }}>
+                {day ? `${dayOf(o, day)} · ${rangeLabel(o)}` : rangeLabel(o)}
+              </T>
+            )}
+            {repeats && (
+              <T variant="small" muted>
+                🔁 {repeatLabel(p)}
+              </T>
+            )}
+            {p.note ? <T variant="small" muted>{p.note}</T> : null}
+            <T variant="fine">{p.created_by === userId ? 'Added by you' : `Added by ${partner.name}`}</T>
+          </View>
         </View>
       </Pressable>
     );
@@ -661,7 +680,8 @@ export default function Calendar() {
                 const past = iso < todayIso;
                 const onDay = byDay.get(iso) ?? [];
                 const has = onDay.length > 0;
-                const single = onDay.some((o) => o.end === o.start);
+                // Each plan's icon, on its first day here: a trip's shows where it starts, or on the 1st if it began last month.
+                const marks = onDay.filter((o) => o.end === o.start || o.start === iso || (o.start < first && iso === first)).slice(0, 2);
                 const trips = onDay.filter((o) => o.end > o.start);
                 const tripStart = trips.some((o) => o.start === iso);
                 const tripEnd = trips.some((o) => o.end === iso);
@@ -709,7 +729,7 @@ export default function Calendar() {
                     )}
                     <View
                       style={[
-                        { flex: 1, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', gap: 3 },
+                        { flex: 1, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', gap: 2 },
                         bothFree && { backgroundColor: alpha(c.accent2, dark ? 0.2 : 0.24), borderWidth: 1.5, borderStyle: 'dashed', borderColor: alpha(c.accent2, 0.8) },
                         isToday && { borderWidth: 2, borderStyle: 'solid', borderColor: c.accent },
                         isSel && {
@@ -725,13 +745,15 @@ export default function Calendar() {
                         </T>
                       )}
                       <T
-                        style={{ fontWeight: isSel || isToday ? '800' : '600', fontVariant: ['tabular-nums'] }}
+                        style={{ fontWeight: isSel || isToday ? '800' : '600', fontVariant: ['tabular-nums'], lineHeight: 19 }}
                         color={isSel ? c.onAccent : past ? alpha(c.ink, 0.45) : c.ink}>
                         {parseISODate(iso).getDate()}
                       </T>
-                      <Row gap={3} style={{ height: 6 }}>
-                        {(single || (isSel && has)) && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isSel ? c.onAccent : c.accent }} />}
-                        {shared && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isSel ? c.onAccent : c.accent2 }} />}
+                      <Row gap={1} style={{ height: 14, opacity: past && !isSel ? 0.6 : 1 }}>
+                        {marks.map((o) => (
+                          <PlanIconView key={`${o.plan.id}-${o.start}`} icon={iconFor(o.plan)} size={14} color={isSel ? c.onAccent : mix(c.accent, c.ink, 0.2)} />
+                        ))}
+                        {shared && <View style={{ width: 6, height: 6, marginLeft: 2, borderRadius: 3, backgroundColor: isSel ? c.onAccent : c.accent2 }} />}
                       </Row>
                     </View>
                   </Pressable>
@@ -742,7 +764,7 @@ export default function Calendar() {
           <View style={{ height: 1, backgroundColor: c.line, marginHorizontal: space.sm }} />
           <Row gap={space.md} style={{ flexWrap: 'wrap', justifyContent: 'center', rowGap: 6, paddingBottom: 4 }}>
             <Row gap={5}>
-              {legendDot(c.accent)}
+              <PlanIconView icon={{ emoji: '📅', glyph: null }} size={13} />
               <T variant="fine">Plans</T>
             </Row>
             <Row gap={5}>
@@ -959,16 +981,19 @@ export default function Calendar() {
       <Sheet open={!!open} onClose={() => setOpen(null)}>
         {open && !confirmDelete && (
           <>
-            <View style={{ gap: 4 }}>
-              <T variant="heading">{open.o.plan.title}</T>
-              <T variant="small" accent style={{ fontWeight: '700' }}>
-                {open.o.end > open.o.start ? `${rangeLabel(open.o)} · ${dayOf(open.o, open.day)}` : dayLabel(open.o.start)}
-                {/* On a later day of a trip, the start time doesn't apply. */}
-                {open.o.plan.time && open.day === open.o.start ? ` · ${timeLabel(open.o.plan.time)}` : ''}
-              </T>
-              {isRepeat(open.o.plan.repeats) && <T variant="small" muted>🔁 {repeatLabel(open.o.plan)}</T>}
-              {open.o.plan.note ? <T variant="small">{open.o.plan.note}</T> : null}
-            </View>
+            <Row gap={space.md} style={{ alignItems: 'flex-start' }}>
+              <PlanIconView icon={iconFor(open.o.plan)} size={46} tint={c.accent} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <T variant="heading">{open.o.plan.title}</T>
+                <T variant="small" accent style={{ fontWeight: '700' }}>
+                  {open.o.end > open.o.start ? `${rangeLabel(open.o)} · ${dayOf(open.o, open.day)}` : dayLabel(open.o.start)}
+                  {/* On a later day of a trip, the start time doesn't apply. */}
+                  {open.o.plan.time && open.day === open.o.start ? ` · ${timeLabel(open.o.plan.time)}` : ''}
+                </T>
+                {isRepeat(open.o.plan.repeats) && <T variant="small" muted>🔁 {repeatLabel(open.o.plan)}</T>}
+                {open.o.plan.note ? <T variant="small">{open.o.plan.note}</T> : null}
+              </View>
+            </Row>
             <ErrorText>{planError}</ErrorText>
             <Button
               title="Change"
