@@ -2,7 +2,7 @@ import { requestRecordingPermissionsAsync } from 'expo-audio';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Animated, FlatList, KeyboardAvoidingView, PanResponder, Pressable, TextInput, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, KeyboardAvoidingView, PanResponder, Pressable, TextInput, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
@@ -28,6 +28,9 @@ import { deleteRecording, durationLabel, uploadVoiceNote } from '@/lib/voice';
 
 const REACTIONS = ['❤️', '😂', '😍', '🥺', '😮', '🔥', '👍'];
 const EDIT_WINDOW = 15 * 60 * 1000;
+/** How many of the newest messages the chat loads when it opens, and how many more each time you reach the top. */
+const NEWEST = 200;
+const EARLIER = 100;
 
 /** When a message counts as sent: its delivery time if it was scheduled. */
 const sentAt = (m: Message) => m.deliver_at ?? m.created_at;
@@ -46,6 +49,17 @@ const snippet = (m: Message | undefined) => {
 
 function sortMessages(list: Message[]) {
   return [...list].sort((a, b) => sentAt(b).localeCompare(sentAt(a)));
+}
+
+/** The time the oldest of these messages was written. */
+const oldestWritten = (list: Message[]) => list.reduce((min, m) => (m.created_at < min ? m.created_at : min), list[0]?.created_at ?? '');
+
+/** Fetches the messages that replies in `list` quote but that aren't in `have`, so those quotes can show what they answer. */
+async function fetchQuoted(coupleId: string, list: Message[], have: Set<string>): Promise<Message[]> {
+  const ids = [...new Set(list.flatMap((m) => (m.reply_to && !have.has(m.reply_to) ? [m.reply_to] : [])))].slice(0, 50);
+  if (!ids.length) return [];
+  const { data } = await supabase.from('messages').select('*').eq('couple_id', coupleId).in('id', ids);
+  return (data ?? []) as Message[];
 }
 
 /** A photo message as the full-screen viewer shows it. */
@@ -151,6 +165,10 @@ export default function Chat() {
   const [, setTick] = useState(0);
   // Messages that replies quote but that are older than the ones loaded.
   const [farQuotes, setFarQuotes] = useState<Map<string, Message>>(new Map());
+  // Whether there may be earlier messages to load when you scroll to the top, and whether the last try failed.
+  const [hasEarlier, setHasEarlier] = useState(true);
+  const [earlierFailed, setEarlierFailed] = useState(false);
+  const loadingEarlier = useRef(false);
   // The message a tapped quote just scrolled to, glowing for a moment so you can spot it.
   const [flashId, setFlashId] = useState<string | null>(null);
   const [glow] = useState(() => new Animated.Value(0));
@@ -171,23 +189,26 @@ export default function Chat() {
   const load = useCallback(async () => {
     if (!coupleId) return;
     const [msgs, reacts, letters] = await Promise.all([
-      supabase.from('messages').select('*').eq('couple_id', coupleId).order('created_at', { ascending: false }).limit(200),
+      supabase.from('messages').select('*').eq('couple_id', coupleId).order('created_at', { ascending: false }).limit(NEWEST),
       supabase.from('message_reactions').select('message_id, user_id, emoji, updated_at').eq('couple_id', coupleId).not('emoji', 'is', null),
       supabase.rpc('get_letters'),
     ]);
+    if (msgs.error) return;
     const loaded = (msgs.data ?? []) as Message[];
-    setMessages(sortMessages(loaded));
+    const fresh = new Set(loaded.map((m) => m.id));
+    const cutoff = oldestWritten(loaded);
+    // Earlier messages you loaded by scrolling up stay, so coming back to the chat keeps your place.
+    // A short batch is the whole chat, so then there is nothing earlier to keep.
+    const whole = loaded.length < NEWEST;
+    setMessages((prev) => sortMessages([...loaded, ...(whole ? [] : prev.filter((m) => !fresh.has(m.id) && m.created_at < cutoff))]));
+    if (whole) setHasEarlier(false);
     const map = new Map<string, Reaction[]>();
     for (const r of (reacts.data ?? []) as Reaction[]) map.set(r.message_id, [...(map.get(r.message_id) ?? []), r]);
     setReactions(map);
     setSealed(((letters.data ?? []) as { from_user: string; opened_at: string | null }[]).filter((l) => l.from_user !== userId && !l.opened_at).length);
-    // A reply can quote a message from before the newest 200. Fetch those so the quote still shows what it answers.
-    const have = new Set(loaded.map((m) => m.id));
-    const missing = [...new Set(loaded.flatMap((m) => (m.reply_to && !have.has(m.reply_to) ? [m.reply_to] : [])))].slice(0, 50);
-    if (missing.length) {
-      const { data } = await supabase.from('messages').select('*').eq('couple_id', coupleId).in('id', missing);
-      setFarQuotes(new Map(((data ?? []) as Message[]).map((m) => [m.id, m])));
-    }
+    // A reply can quote a message from before the ones loaded. Fetch those so the quote still shows what it answers.
+    const quoted = await fetchQuoted(coupleId, loaded, fresh);
+    if (quoted.length) setFarQuotes((prev) => new Map([...prev, ...quoted.map((m) => [m.id, m] as const)]));
   }, [coupleId, userId]);
 
   useFocusEffect(
@@ -419,6 +440,32 @@ export default function Chat() {
     setTimeout(() => input.current?.focus(), 150);
   }
 
+  /** Loads the next batch of earlier messages, when you scroll to the top of the chat. */
+  async function loadEarlier() {
+    if (!coupleId || !hasEarlier || !messages.length || loadingEarlier.current) return;
+    loadingEarlier.current = true;
+    setEarlierFailed(false);
+    const { data, error: err } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('couple_id', coupleId)
+      .lt('created_at', oldestWritten(messages))
+      .order('created_at', { ascending: false })
+      .limit(EARLIER);
+    loadingEarlier.current = false;
+    if (err) return setEarlierFailed(true);
+    const earlier = (data ?? []) as Message[];
+    if (earlier.length < EARLIER) setHasEarlier(false);
+    if (!earlier.length) return;
+    setMessages((prev) => {
+      const have = new Set(prev.map((m) => m.id));
+      return sortMessages([...prev, ...earlier.filter((m) => !have.has(m.id))]);
+    });
+    const have = new Set([...messages.map((m) => m.id), ...earlier.map((m) => m.id), ...farQuotes.keys()]);
+    const quoted = await fetchQuoted(coupleId, earlier, have);
+    if (quoted.length) setFarQuotes((prev) => new Map([...prev, ...quoted.map((m) => [m.id, m] as const)]));
+  }
+
   /** Tapping the quote on a reply shows what it answers: a photo opens, anything else is scrolled to and glows. */
   function openQuoted(q: Message) {
     if (q.image_path) {
@@ -530,10 +577,27 @@ export default function Chat() {
           contentContainerStyle={{ padding: space.lg, gap: 6 }}
           keyboardShouldPersistTaps="handled"
           extraData={listExtra}
+          // The list is upside down, so its end is the top of the chat: earlier messages load as you get near it.
+          onEndReached={loadEarlier}
+          onEndReachedThreshold={0.5}
           ListFooterComponent={
-            <T variant="fine" style={{ textAlign: 'center', marginBottom: space.md }}>
-              Double tap a message to send a heart. Hold it for more. Swipe right to reply.
-            </T>
+            hasEarlier && messages.length ? (
+              <View style={{ alignItems: 'center', paddingVertical: space.md }}>
+                {earlierFailed ? (
+                  <Pressable onPress={loadEarlier} accessibilityRole="button" style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.6 : 1 })}>
+                    <T variant="small" accent>
+                      Couldn’t load earlier messages. Tap to try again.
+                    </T>
+                  </Pressable>
+                ) : (
+                  <ActivityIndicator color={c.accent} accessibilityLabel="Loading earlier messages" />
+                )}
+              </View>
+            ) : (
+              <T variant="fine" style={{ textAlign: 'center', marginBottom: space.md }}>
+                Double tap a message to send a heart. Hold it for more. Swipe right to reply.
+              </T>
+            )
           }
           ListEmptyComponent={
             <T muted style={{ textAlign: 'center', marginTop: space.xl, transform: [{ scaleY: -1 }] }}>
