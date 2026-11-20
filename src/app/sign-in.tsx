@@ -105,6 +105,16 @@ export default function SignIn() {
               <ErrorText>{error}</ErrorText>
               <Button title={signup ? 'Create account' : 'Sign in'} onPress={submit} loading={busy} />
               <View style={{ alignItems: 'center' }}>
+                {!signup && (
+                  <Button
+                    variant="ghost"
+                    title="Forgot password?"
+                    onPress={() => {
+                      setError('');
+                      router.push({ pathname: '/forgot-password', params: email.trim() ? { email: email.trim() } : {} });
+                    }}
+                  />
+                )}
                 <Button
                   variant="ghost"
                   title={signup ? 'I already have an account' : 'I need a new account'}
