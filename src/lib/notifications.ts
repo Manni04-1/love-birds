@@ -4,7 +4,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { AndroidImportance } from 'expo-notifications';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { addDays, parseISODate, timeLabel, toISODate, today } from './dates';
@@ -100,6 +100,25 @@ function useNotificationTapsNative() {
 
 /** Opens the right screen when a notification is tapped (phones only: the web preview has no notifications). */
 export const useNotificationTaps = Platform.OS === 'web' ? () => {} : useNotificationTapsNative;
+
+/**
+ * Clears Love Birds notifications from the phone's notification list once you're in the app, when
+ * it opens and each time you come back to it, since everything they say is in here. While the app
+ * lock is showing they stay, so whoever picks up a locked phone can't wipe them away.
+ */
+function useClearNotificationsNative(unlocked: boolean) {
+  const [active, setActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setActive(state === 'active'));
+    return () => sub.remove();
+  }, []);
+  // Coming back after the lock's time sets locked in the same moment, so this waits for the unlock.
+  useEffect(() => {
+    if (active && unlocked) Notifications.dismissAllNotificationsAsync().catch(() => {});
+  }, [active, unlocked]);
+}
+
+export const useClearNotifications: (unlocked: boolean) => void = Platform.OS === 'web' ? () => {} : useClearNotificationsNative;
 
 // ---------------------------------------------------------------------------
 // Plan reminders (scheduled on the phone, so they work even offline)

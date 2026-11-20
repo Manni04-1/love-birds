@@ -24,9 +24,16 @@ import { space, useColors } from '@/lib/theme';
 
 const OFF: LockSettings = { on: false, biometrics: false, after: 0 };
 
-const LockContext = createContext<{ settings: LockSettings; reload: () => Promise<void> }>({ settings: OFF, reload: async () => {} });
+const LockContext = createContext<{ settings: LockSettings; reload: () => Promise<void>; unlocked: boolean }>({
+  settings: OFF,
+  reload: async () => {},
+  unlocked: true,
+});
 
-/** The lock's settings on this phone, and a way to re-read them after changing them. */
+/**
+ * The lock's settings on this phone, a way to re-read them after changing them, and whether
+ * you're past the lock screen (always, when the lock is off).
+ */
 export function useAppLock() {
   return useContext(LockContext);
 }
@@ -363,7 +370,7 @@ export function AppLock({ children }: { children: ReactNode }) {
   const unlock = useCallback(() => setLocked(false), []);
 
   return (
-    <LockContext.Provider value={{ settings: settings ?? OFF, reload }}>
+    <LockContext.Provider value={{ settings: settings ?? OFF, reload, unlocked: settings !== null && !(on && locked) }}>
       {children}
       {signedIn && (settings === null || (on && covered && !locked)) && <View style={[StyleSheet.absoluteFill, { backgroundColor: background }]} />}
       {signedIn && on && locked && settings && <LockScreen settings={settings} onUnlock={unlock} />}

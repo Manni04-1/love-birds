@@ -46,7 +46,7 @@ Android delivers notifications through Firebase. Once:
 3. On [expo.dev](https://expo.dev), open the project, then **Credentials > Android**, and upload that key under **FCM V1 service account key**.
 4. Run [`supabase/notifications.sql`](supabase/notifications.sql) in the Supabase SQL Editor if you haven't yet.
 
-The database sends a notification through Expo when one of you sends a message, adds a plan or memory, answers the daily question or hearts something. Plan reminders (an hour before, or 9 AM for all-day plans) are scheduled on each phone. Every notification plays [`assets/sounds/love.wav`](assets/sounds/love.wav). **Settings > Notifications > Send me a test** checks the whole chain.
+The database sends a notification through Expo when one of you sends a message, adds a plan or memory, answers the daily question or hearts something. Plan reminders (an hour before, or 9 AM for all-day plans) are scheduled on each phone. Every notification plays [`assets/sounds/love.wav`](assets/sounds/love.wav). Opening the app (once you're past the app lock, if you use one) clears its notifications from the phone's list, since everything they say is in the app. **Settings > Notifications > Send me a test** checks the whole chain.
 
 ### Automatic updates
 
