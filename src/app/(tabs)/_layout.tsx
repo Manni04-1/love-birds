@@ -2,9 +2,10 @@ import { NativeTabs } from 'expo-router/native-tabs';
 import { useMemo, type ReactNode } from 'react';
 import { View } from 'react-native';
 
+import { useAppLock } from '@/components/app-lock';
 import { FloatingHearts } from '@/components/floating-hearts';
 import { addDays, today } from '@/lib/dates';
-import { useNotificationSetup, useNotificationTaps, useReminders } from '@/lib/notifications';
+import { useClearNotifications, useNotificationSetup, useNotificationTaps, useReminders } from '@/lib/notifications';
 import { RoomProvider, useRoom } from '@/lib/room';
 import { useCouple } from '@/lib/session';
 import { specialDays } from '@/lib/special-days';
@@ -50,6 +51,8 @@ function Tabs() {
   useNotificationSetup(ctx?.userId, ctx?.profile.chime);
   useReminders(ctx?.couple.id, specials);
   useNotificationTaps();
+  const { unlocked } = useAppLock();
+  useClearNotifications(unlocked);
   // Anything a widget shows: when one of these changes, the widgets draw again.
   const p = ctx?.profile;
   useWidgetSync(
