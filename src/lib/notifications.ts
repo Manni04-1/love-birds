@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
+import { chimeChannel, chimeFor, chimeInfo, isChimeChannel, type ChimeKey } from './chimes';
 import { addDays, parseISODate, timeLabel, toISODate, today } from './dates';
 import { whileAway } from './lock';
 import { iconFor } from './plan-icons';
@@ -15,9 +16,102 @@ import { supabase } from './supabase';
 import type { SpecialDay } from './special-days';
 import type { Plan } from './types';
 
-/** The Android channel every Love Birds notification uses, with the love.wav chime. */
-export const CHANNEL = 'love';
-const SOUND = 'love.wav';
+// ---------------------------------------------------------------------------
+// Chimes. Each has its own Android channel (see chimes.ts), and only the one
+// you picked is kept, so the phone's settings list Love Birds notifications once.
+// ---------------------------------------------------------------------------
+
+const CHIME_SETTING = 'chime';
+let chime: ChimeKey = 'love';
+// Read before any channel is made, so the app never swaps channels while it starts.
+const chimeLoaded: Promise<void> =
+  Platform.OS === 'web'
+    ? Promise.resolve()
+    : AsyncStorage.getItem(CHIME_SETTING)
+        .then((saved) => {
+          chime = chimeFor(saved);
+        })
+        .catch(() => {});
+
+// Channel changes run one at a time, so a change and a start-up check can't cross.
+let channelQueue: Promise<unknown> = Promise.resolve();
+function inTurn<T>(task: () => Promise<T>): Promise<T> {
+  const run = channelQueue.then(task, task);
+  channelQueue = run.catch(() => {});
+  return run;
+}
+
+/** What scheduled reminders play: the channel and, for older Androids, the sound. */
+function sound(): { channelId: string; file: string | undefined } {
+  const file = chimeInfo(chime).file;
+  return { channelId: chimeChannel(chime), file: file === null ? undefined : (file ?? 'default') };
+}
+
+async function makeChannel(key: ChimeKey) {
+  const file = chimeInfo(key).file;
+  await Notifications.setNotificationChannelAsync(chimeChannel(key), {
+    name: 'Love notes',
+    description: 'Messages, plans, memories, answers and reminders',
+    importance: AndroidImportance.HIGH,
+    // Left out, Android plays the phone's own sound. Null plays none.
+    ...(file === undefined ? {} : { sound: file }),
+    vibrationPattern: [0, 110, 130, 110], // a heartbeat
+    lightColor: '#E0218A',
+  });
+}
+
+async function dropOtherChannels(key: ChimeKey) {
+  const keep = chimeChannel(key);
+  const all = await Notifications.getNotificationChannelsAsync();
+  await Promise.all(all.filter((ch) => ch.id !== keep && isChimeChannel(ch.id)).map((ch) => Notifications.deleteNotificationChannelAsync(ch.id)));
+}
+
+// Plan and evening reminders listen, so they move to the new chime's channel.
+const chimeWatchers = new Set<() => void>();
+
+async function adoptChime(key: ChimeKey) {
+  chime = key;
+  await AsyncStorage.setItem(CHIME_SETTING, key).catch(() => {});
+  if (Platform.OS === 'android') {
+    await makeChannel(key);
+    await dropOtherChannels(key);
+  }
+  chimeWatchers.forEach((watch) => watch());
+}
+
+/** The chime this phone plays now. */
+export async function currentChime(): Promise<ChimeKey> {
+  await chimeLoaded;
+  return chime;
+}
+
+/**
+ * Picks the chime this phone plays. Its channel is made first and your profile saved second,
+ * so the server never sends through a channel the phone doesn't have yet.
+ */
+export function changeChime(userId: string, key: ChimeKey): Promise<{ message: string; code?: string } | null> {
+  return inTurn(async () => {
+    await chimeLoaded;
+    const android = Platform.OS === 'android';
+    if (android) await makeChannel(key);
+    const { error } = await supabase.from('profiles').update({ chime: key }).eq('id', userId);
+    if (error) {
+      if (android && key !== chime) await Notifications.deleteNotificationChannelAsync(chimeChannel(key)).catch(() => {});
+      return error;
+    }
+    await adoptChime(key);
+    return null;
+  });
+}
+
+/** Follows the chime saved on your profile, for example after reinstalling or picking one on another phone. */
+export function followChime(saved: string | null | undefined) {
+  return inTurn(async () => {
+    await chimeLoaded;
+    const key = chimeFor(saved);
+    if (key !== chime) await adoptChime(key);
+  });
+}
 
 // True while the chat is on screen, so new messages don't also pop up as notifications.
 let chatOpen = false;
@@ -34,15 +128,13 @@ if (Platform.OS !== 'web') {
   });
 }
 
+/** Makes sure this phone has the channel for its chime, and only that one. */
 async function ensureChannel() {
   if (Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync(CHANNEL, {
-    name: 'Love notes',
-    description: 'Messages, plans, memories, answers and reminders',
-    importance: AndroidImportance.HIGH,
-    sound: SOUND,
-    vibrationPattern: [0, 110, 130, 110], // a heartbeat
-    lightColor: '#E0218A',
+  await inTurn(async () => {
+    await chimeLoaded;
+    await makeChannel(chime);
+    await dropOtherChannels(chime);
   });
 }
 
@@ -79,12 +171,18 @@ export async function forgetThisPhone(userId: string) {
   await supabase.from('profiles').update({ push_token: null }).eq('id', userId);
 }
 
-/** Registers for notifications once the couple is linked, asking the first time. */
-export function useNotificationSetup(userId: string | undefined) {
+/**
+ * Registers for notifications once the couple is linked, asking the first time. `chime` is the
+ * one saved on your profile: the phone makes its channel before the server sends through it.
+ */
+export function useNotificationSetup(userId: string | undefined, chime: string | null | undefined) {
   useEffect(() => {
     if (!userId) return;
-    enableNotifications(userId, true).catch(() => {});
-  }, [userId]);
+    followChime(chime)
+      .catch(() => {})
+      .then(() => enableNotifications(userId, true))
+      .catch(() => {});
+  }, [userId, chime]);
 }
 
 /** Opens the right screen when a notification is tapped. */
@@ -172,15 +270,16 @@ async function scheduleReminders(plans: Plan[], specials: SpecialDay[]) {
     if (at.getTime() < soon) continue;
     const several = end > start;
     const icon = iconFor(plan).emoji;
+    const { channelId, file } = sound();
     const when = several ? [plan.time && timeLabel(plan.time), `Until ${shortDay(end)}`] : [plan.time ? timeLabel(plan.time) : 'All day'];
     await Notifications.scheduleNotificationAsync({
       content: {
         title: plan.time ? `${icon} In an hour: ${plan.title}` : several ? `${icon} Starts today: ${plan.title}` : `${icon} Today: ${plan.title}`,
         body: [...when, plan.note].filter(Boolean).join(' · '),
-        sound: SOUND,
+        sound: file,
         data: { url: `/calendar?day=${start}` },
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId },
     });
   }
   // Anniversaries, birthdays and milestones: 8 AM on the day.
@@ -189,9 +288,10 @@ async function scheduleReminders(plans: Plan[], specials: SpecialDay[]) {
     const at = parseISODate(s.day);
     at.setHours(8, 0, 0, 0);
     if (at.getTime() < soon) continue;
+    const { channelId, file } = sound();
     await Notifications.scheduleNotificationAsync({
-      content: { title: `${s.emoji} ${s.title}`, body: SPECIAL_BODY[s.kind], sound: SOUND, data: { url: `/calendar?day=${s.day}` } },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
+      content: { title: `${s.emoji} ${s.title}`, body: SPECIAL_BODY[s.kind], sound: file, data: { url: `/calendar?day=${s.day}` } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId },
     });
   }
 }
@@ -219,6 +319,12 @@ export function useReminders(coupleId: string | undefined, specials: SpecialDay[
     };
     sync();
     evening();
+    // A new chime has a new channel: set the reminders again on it.
+    const moved = () => {
+      sync();
+      evening();
+    };
+    chimeWatchers.add(moved);
     const channel = supabase
       .channel(`reminders:${coupleId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `couple_id=eq.${coupleId}` }, sync)
@@ -230,6 +336,7 @@ export function useReminders(coupleId: string | undefined, specials: SpecialDay[
       }
     });
     return () => {
+      chimeWatchers.delete(moved);
       supabase.removeChannel(channel);
       sub.remove();
     };
@@ -269,15 +376,16 @@ async function scheduleEvening(coupleId: string) {
     const at = addDays(t, i);
     at.setHours(20, 0, 0, 0);
     if (at.getTime() < soon) continue;
+    const { channelId, file } = sound();
     await Notifications.scheduleNotificationAsync({
       identifier: `${EVENING}${toISODate(at)}`,
       content: {
         title: '🌹 Your evening moment',
         body: 'Share a rose, a thorn and a bud, and your photo of the day.',
-        sound: SOUND,
+        sound: file,
         data: { url: '/checkin' },
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId },
     });
   }
 }

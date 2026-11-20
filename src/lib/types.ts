@@ -24,6 +24,8 @@ export type Profile = {
   real_name?: string;
   /** Notifications say "New message" instead of showing what your partner wrote. */
   private_notifications?: boolean | null;
+  /** The chime your phone plays for notifications, from src/lib/chimes.ts. Null is the original. Missing until chimes.sql has run. */
+  chime?: string | null;
 };
 
 export type Couple = {

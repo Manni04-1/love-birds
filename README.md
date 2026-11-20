@@ -7,7 +7,7 @@ A private app for two: a shared calendar, a chat, a timeline of memories and pho
 ### 1. Set up the database
 
 1. Create a free account at [supabase.com](https://supabase.com) and make a new project. Pick the region closest to you.
-2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success". Then do the same with [`supabase/notifications.sql`](supabase/notifications.sql), then [`supabase/together.sql`](supabase/together.sql), [`supabase/daily.sql`](supabase/daily.sql), [`supabase/engage.sql`](supabase/engage.sql), [`supabase/extras.sql`](supabase/extras.sql), and then [`supabase/calendar.sql`](supabase/calendar.sql).
+2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success". Then do the same with [`supabase/notifications.sql`](supabase/notifications.sql), then [`supabase/together.sql`](supabase/together.sql), [`supabase/daily.sql`](supabase/daily.sql), [`supabase/engage.sql`](supabase/engage.sql), [`supabase/extras.sql`](supabase/extras.sql), [`supabase/calendar.sql`](supabase/calendar.sql), [`supabase/plan-icons.sql`](supabase/plan-icons.sql), and then [`supabase/chimes.sql`](supabase/chimes.sql).
 3. While you're testing, turn off email confirmation so you can sign in straight away: **Authentication > Sign In / Providers > Email**, switch off **Confirm email**, and save. Turn it back on before you invite other couples.
 
 ### 2. Connect the app to the database
@@ -35,7 +35,7 @@ GitHub builds an installable app every time the code on `main` changes (see [`.g
 1. Do step 1 above (set up Supabase).
 2. The build connects to the Supabase project named in [`.github/workflows/android.yml`](.github/workflows/android.yml). To use a different project, add the repository variables `SUPABASE_URL` and `SUPABASE_ANON_KEY` under **Settings > Secrets and variables > Actions > Variables**.
 3. Open **Actions > Android app > Run workflow**. The build takes about 20 to 30 minutes.
-4. On each phone, open [the download link](https://github.com/Manni04-1/love-birds/releases/download/android-latest/love-birds.apk), open the file, and allow your browser to install apps when Android asks. Your data stays when you install a newer file over the old one.
+4. On each phone, open [the download link](https://github.com/Manni04-1/love-birds/releases/download/android-latest/love-birds.apk), open the file, and allow your browser to install apps when Android asks. Your data stays when you install a newer file over the old one. Version 1.4.0 is the first signed with the app's own key (see [The signing key](#the-signing-key)), so the first time, uninstall the old app before installing it. Your chats, photos and plans stay online, but you sign in and set up the app lock again.
 
 ### Notifications
 
@@ -60,6 +60,10 @@ To turn this on, once:
 
 The next build on `main` links the app to an Expo project, and from then on every push to `main` also sends an update. Changes to native packages can't travel this way: when you add or upgrade one, raise `version` in `app.json` so the phones install the new file from the download link instead.
 
+### The signing key
+
+Android only lets a new file update an installed app if both are signed with the same key. Builds from `main` are signed with Love Birds' own private key, which is kept on expo.dev as the sensitive environment variable `ANDROID_SIGNING_KEY` in the production environment (the project's **Environment variables** page). The first build on `main` that needed it made it, with [`.github/scripts/signing-key.sh`](.github/scripts/signing-key.sh). Keep a copy somewhere private, and never delete or change the variable: without it, the next file can't update the app on the phones, and both would have to uninstall again. Pull request builds use Android's public debug key, so they can't install over the real app.
+
 ## What's in this version
 
 | Feature | What works |
@@ -78,7 +82,7 @@ The next build on `main` links the app to an Expo project, and from then on ever
 | Chat | Text, photos and voice notes (tap the mic, up to 5 minutes), tap a message to heart it, "Seen" receipts, live updates. Each of you picks a bubble: fuchsia with hearts, or thorny vines and roses |
 | Home-screen widgets (Android) | Love Birds (4 × 2): your animals, days together, how your partner feels and your next plan. Countdown (2 × 2): days to go until your next plan. Thinking of you (2 × 1): one tap sends the heartbeat. Add them from Settings or from your home screen's widget list. With private notifications on, they leave out plan names and mood words |
 | Save photos | Open any photo full screen and tap Save to put a copy in your phone's gallery |
-| Notifications | A soft love chime for messages, hearts, new plans and memories, and daily answers. Reminders an hour before plans, and an evening reminder at 8 PM for your rose, thorn and bud (skipped once you've checked in, and you can switch it off) |
+| Notifications | A chime for messages, hearts, new plans and memories, and daily answers. Each of you picks the chime your own phone plays in **Settings > Notifications > Chime**: the original Love birds, Birdsong, Music box, Harp, Kalimba, Marimba, Steel pan, Soft piano, Ukulele, Wind chimes, Crystal, Sparkle, Ding-dong, Bubbles, Whistle or Heartbeat, your phone's own sound, or vibrate only. Reminders an hour before plans, and an evening reminder at 8 PM for your rose, thorn and bud (skipped once you've checked in, and you can switch it off) |
 | Memories | Photo, caption, date and place, "Love" a memory, long press your own to delete |
 | Date ideas | A deck of about 90 ideas (at home, going out, adventure, romantic and around Nairobi) to swipe right or left. When you both like one it's a match, with a notification. Plan a match straight into the calendar, then save it as a memory after the date. Add your own ideas, filter by type or free, and tap Surprise me |
 | Games | Would you rather and How well do you know me (with a score both ways): your partner's answers stay hidden until you've answered too. Talk decks to pull cards from: Light, Deep, Flirty and Erotic |
@@ -110,6 +114,7 @@ npm run lint        # ESLint
 - `supabase/daily.sql` holds moods, thinking-of-you taps, check-ins, photos of the day, the theme column and answer editing. `src/lib/daily.ts` reads and saves them, and `src/components/daily.tsx` draws them on Home. Moods and sweet gestures live in `src/content`.
 - `supabase/extras.sql` holds Tonight (swipe to decide), shared lists, Home safe, chat stickers, private notifications, wishlists with secret claims, your story's milestones, love coupons, time capsules, trip funds and the monthly recap, with their notifications and the two scheduled jobs (time capsules every 15 minutes, the recap at 9 AM Nairobi time on the 1st). Each new screen lives in `src/app` under its own name (`tonight`, `lists`, `wishlist`, `our-story`, `coupons`, `trip-fund`, `recap`, `chat-search`). Tonight's options, coupons, story ideas and sticker captions live in `src/content`: keep their keys when you reword them.
 - `supabase/calendar.sql` lets a plan last several days (`end_day`) and repeat (`repeats`, `repeat_until`, and `skip_days` for the times you skip). The app works out each time a plan comes round in `src/lib/plans.ts`, so the calendar, Home and the reminders on each phone all use that rather than `events.day` alone.
+- Chimes: `src/lib/chimes.ts` lists them, the files are in `assets/sounds` and in the `sounds` list of the expo-notifications plugin in `app.json` (so a new chime needs a new `version` and a reinstall). Android fixes a notification channel's sound when the channel is made, so each chime has its own channel (`love` for the original, `love-<chime>` for the rest). `src/lib/notifications.ts` makes the chosen chime's channel before saving `profiles.chime`, keeps only that channel and moves reminders onto it, and `push_to` in `supabase/chimes.sql` sends each notification through the recipient's channel. The sounds were made from scratch with simple physical models (no samples).
 - `src/lib/theme.ts` holds the six themes' colours and the fonts (Bricolage Grotesque for headings, Nunito Sans for text). `src/components/hero.tsx` draws each theme's moving picture.
 - `src/lib/lock.ts` keeps the app lock in `expo-secure-store` (a salted SHA-256 of the PIN, the fingerprint choice and the wrong-PIN count). `src/components/app-lock.tsx` shows the lock screen and the PIN setup. Wrap anything that leaves the app on purpose (pickers, permission prompts) in `whileAway()` so it doesn't lock.
 - The app icon, splash and notification icon are drawn from one SVG mark (two love birds making a heart). `src/components/mark.tsx` draws the same mark inside the app.
