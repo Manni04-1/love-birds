@@ -35,7 +35,7 @@ GitHub builds an installable app every time the code on `main` changes (see [`.g
 1. Do step 1 above (set up Supabase).
 2. The build connects to the Supabase project named in [`.github/workflows/android.yml`](.github/workflows/android.yml). To use a different project, add the repository variables `SUPABASE_URL` and `SUPABASE_ANON_KEY` under **Settings > Secrets and variables > Actions > Variables**.
 3. Open **Actions > Android app > Run workflow**. The build takes about 20 to 30 minutes.
-4. On each phone, open [the download link](https://github.com/Manni04-1/love-birds/releases/download/android-latest/love-birds.apk), open the file, and allow your browser to install apps when Android asks. Your data stays when you install a newer file over the old one.
+4. On each phone, open [the download link](https://github.com/Manni04-1/love-birds/releases/download/android-latest/love-birds.apk), open the file, and allow your browser to install apps when Android asks. Your data stays when you install a newer file over the old one. Version 1.4.0 is the first signed with the app's own key (see [The signing key](#the-signing-key)), so the first time, uninstall the old app before installing it. Your chats, photos and plans stay online, but you sign in and set up the app lock again.
 
 ### Notifications
 
@@ -59,6 +59,10 @@ To turn this on, once:
 3. In this repository, open **Settings > Secrets and variables > Actions > New repository secret**, name it `EXPO_TOKEN` and paste the token.
 
 The next build on `main` links the app to an Expo project, and from then on every push to `main` also sends an update. Changes to native packages can't travel this way: when you add or upgrade one, raise `version` in `app.json` so the phones install the new file from the download link instead.
+
+### The signing key
+
+Android only lets a new file update an installed app if both are signed with the same key. Builds from `main` are signed with Love Birds' own private key, which is kept on expo.dev as the sensitive environment variable `ANDROID_SIGNING_KEY` in the production environment (the project's **Environment variables** page). The first build on `main` that needed it made it, with [`.github/scripts/signing-key.sh`](.github/scripts/signing-key.sh). Keep a copy somewhere private, and never delete or change the variable: without it, the next file can't update the app on the phones, and both would have to uninstall again. Pull request builds use Android's public debug key, so they can't install over the real app.
 
 ## What's in this version
 

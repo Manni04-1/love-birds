@@ -11,6 +11,12 @@ name: Android app
 # EXPO_TOKEN, an access token from expo.dev > Account settings > Access tokens.
 # Without it, the app still builds, just without automatic updates.
 #
+# Builds from main are signed with the app's own private key, which lives on
+# expo.dev as the sensitive environment variable ANDROID_SIGNING_KEY (see
+# .github/scripts/signing-key.sh). Only an app signed with the same key can
+# update the one on your phones. Pull request builds keep Android's public debug
+# key, so they can't install over the real app.
+#
 # The app connects to the Supabase project below. The publishable key is meant
 # to ship inside the app (Supabase's privacy rules protect the data), so it is
 # fine to keep here. To point the app at another project, set the repository
@@ -22,6 +28,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      sign:
+        description: Sign with the app's private key (builds from main always are)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -83,12 +94,31 @@ jobs:
           npx expo prebuild --platform android --no-install
           sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g/' android/gradle.properties
 
+      # Makes the key the first time, so it needs EXPO_TOKEN. Without it, this
+      # stops the build rather than publish an app your phones can't install.
+      - name: Use the app's signing key
+        if: github.ref == 'refs/heads/main' || inputs.sign
+        run: .github/scripts/signing-key.sh
+
       - name: Build the app
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
 
       - name: Name the file
         run: cp android/app/build/outputs/apk/release/app-release.apk love-birds.apk
+
+      - name: Check the signature
+        if: github.ref == 'refs/heads/main' || inputs.sign
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          signed=$("$apksigner" verify --print-certs love-birds.apk | grep -m1 'certificate SHA-256 digest' | awk '{print $NF}')
+          ours=$(keytool -list -v -keystore "$LOVE_BIRDS_KEYSTORE" -storepass "$LOVE_BIRDS_KEYSTORE_PASSWORD" -alias lovebirds \
+            | grep -m1 'SHA256:' | awk '{print $NF}' | tr -d : | tr 'A-F' 'a-f')
+          if [ -z "$signed" ] || [ "$signed" != "$ours" ]; then
+            echo "::error::The app isn't signed with the Love Birds key."
+            exit 1
+          fi
+          echo "Signed with the Love Birds key, certificate SHA-256 $signed"
 
       - uses: actions/upload-artifact@v4
         with:
