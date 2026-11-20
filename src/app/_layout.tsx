@@ -42,6 +42,7 @@ function Routes() {
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="welcome" />
         <Stack.Screen name="sign-in" />
+        <Stack.Screen name="forgot-password" />
       </Stack.Protected>
 
       {/* Signed in, waiting to link with a partner */}

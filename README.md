@@ -37,6 +37,16 @@ GitHub builds an installable app every time the code on `main` changes (see [`.g
 3. Open **Actions > Android app > Run workflow**. The build takes about 20 to 30 minutes.
 4. On each phone, open [the download link](https://github.com/Manni04-1/love-birds/releases/download/android-latest/love-birds.apk), open the file, and allow your browser to install apps when Android asks. Your data stays when you install a newer file over the old one. Version 1.4.0 is the first signed with the app's own key (see [The signing key](#the-signing-key)), so the first time, uninstall the old app before installing it. Your chats, photos and plans stay online, but you sign in and set up the app lock again.
 
+### Forgot password emails
+
+**Forgot password?** on the sign-in screen emails a code. Supabase's built-in email only reaches people on your Supabase team, so send through a Gmail account instead. It's free and done once:
+
+1. Choose the Gmail account the emails come from. In its Google Account, turn on **2-Step Verification**, then open [App passwords](https://myaccount.google.com/apppasswords), make one called Supabase and copy it. Keep it private.
+2. In Supabase, open **Authentication > Emails > SMTP Settings**, turn on custom SMTP and fill in: sender email and username = that Gmail address, sender name = Love Birds, host `smtp.gmail.com`, port `465`, password = the app password. Save.
+3. Open **Authentication > Emails > Templates > Reset password**, set the subject to "Your Love Birds code", paste [`supabase/reset-password-email.html`](supabase/reset-password-email.html) as the body, and save.
+
+Gmail sends up to 500 emails a day this way. **Settings > Change password** works without any of this.
+
 ### Notifications
 
 Android delivers notifications through Firebase. Once:
@@ -68,7 +78,7 @@ Android only lets a new file update an installed app if both are signed with the
 
 | Feature | What works |
 | --- | --- |
-| Accounts | Sign up and sign in with email and password |
+| Accounts | Sign up and sign in with email and password. Change your password in Settings, or set a new one with a code by email if you forget it (see [Forgot password emails](#forgot-password-emails)) |
 | Partner linking | 6-character invite code, valid for 24 hours, works once |
 | Home | An animated picture for your theme, days together with anniversaries and every hundredth day, today's rituals with a progress count, a countdown to your next plan, and your latest memory |
 | Thinking of you | One tap makes your partner's phone buzz with a heartbeat and the love chime. If they have the app open they see it straight away |

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
 import { BackupControls } from '@/components/backup';
+import { ChangePassword } from '@/components/change-password';
 import { ChimePicker } from '@/components/chime-picker';
 import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
 import { Hero, heroInk } from '@/components/hero';
@@ -157,6 +158,8 @@ export default function Settings() {
   const [themeError, setThemeError] = useState('');
   const { settings: lock, reload: reloadLock } = useAppLock();
   const [pinTask, setPinTask] = useState<PinTask | null>(null);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordNote, setPasswordNote] = useState('');
   const [canBio, setCanBio] = useState(false);
   const theme = useThemeName();
   const font = useFontName();
@@ -636,6 +639,21 @@ export default function Settings() {
         </Group>
 
         <Group label="Account">
+          {ctx.session?.user.email ? (
+            <Pressable
+              onPress={() => {
+                setPasswordNote('');
+                setChangingPassword(true);
+              }}
+              accessibilityRole="button">
+              <T variant="strong">Change password</T>
+            </Pressable>
+          ) : null}
+          {passwordNote ? (
+            <T variant="small" muted>
+              {passwordNote}
+            </T>
+          ) : null}
           <Pressable onPress={signOut} accessibilityRole="button">
             <T variant="strong">Sign out</T>
           </Pressable>
@@ -652,6 +670,15 @@ export default function Settings() {
         </Group>
       </ScrollView>
       <PinSetup task={pinTask} onClose={() => setPinTask(null)} />
+      <ChangePassword
+        open={changingPassword}
+        email={ctx.session?.user.email ?? ''}
+        onDone={() => {
+          setChangingPassword(false);
+          setPasswordNote('Password changed. Use the new one next time you sign in.');
+        }}
+        onClose={() => setChangingPassword(false)}
+      />
       <ChimePicker open={choosingChime} current={chimeFor(profile.chime)} onUse={pickChime} onClose={() => setChoosingChime(false)} />
     </SafeAreaView>
   );

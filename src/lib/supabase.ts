@@ -19,6 +19,17 @@ export const supabase = createClient(url || 'https://not-configured.supabase.co'
   },
 });
 
+/**
+ * A second client whose sign-in stays in memory and never reaches the app. Resetting a forgotten
+ * password signs in with the emailed code on one of these, so the app doesn't open until the new
+ * password is saved, and checking your current password doesn't touch your sign-in.
+ */
+export function sideClient() {
+  return createClient(url || 'https://not-configured.supabase.co', anonKey || 'not-configured', {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'love-birds-side' },
+  });
+}
+
 // Keep the sign-in fresh only while the app is open.
 if (Platform.OS !== 'web') {
   AppState.addEventListener('change', (state) => {
