@@ -9,6 +9,7 @@ import { AppState, Platform } from 'react-native';
 
 import { addDays, parseISODate, timeLabel, toISODate, today } from './dates';
 import { whileAway } from './lock';
+import { iconFor } from './plan-icons';
 import { loadPlans, occurrencesBetween, shortDay } from './plans';
 import { supabase } from './supabase';
 import type { SpecialDay } from './special-days';
@@ -151,10 +152,11 @@ async function scheduleReminders(plans: Plan[], specials: SpecialDay[]) {
     const at = reminderTime({ day: start, time: plan.time });
     if (at.getTime() < soon) continue;
     const several = end > start;
+    const icon = iconFor(plan).emoji;
     const when = several ? [plan.time && timeLabel(plan.time), `Until ${shortDay(end)}`] : [plan.time ? timeLabel(plan.time) : 'All day'];
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: plan.time ? `💕 In an hour: ${plan.title}` : several ? `💕 Starts today: ${plan.title}` : `💕 Today: ${plan.title}`,
+        title: plan.time ? `${icon} In an hour: ${plan.title}` : several ? `${icon} Starts today: ${plan.title}` : `${icon} Today: ${plan.title}`,
         body: [...when, plan.note].filter(Boolean).join(' · '),
         sound: SOUND,
         data: { url: `/calendar?day=${start}` },

@@ -53,6 +53,10 @@ export type Plan = {
   repeat_until?: string | null;
   /** Start days of times that were skipped. */
   skip_days?: string[] | null;
+  /** The plan's emoji, also for notifications and widgets. Missing until plan-icons.sql has run. */
+  emoji?: string | null;
+  /** A drawn icon (a Material Symbol) picked instead of an emoji. */
+  glyph?: string | null;
 };
 
 export type Message = {

@@ -53,6 +53,12 @@ export function moodLabel(data: WidgetData, day: string): string {
   return `${data.partner} feels ${m.emoji} ${m.word}`;
 }
 
+/** The next plan's emoji, or a calendar when nothing's planned or plan names are kept private. */
+export function planEmoji(data: WidgetData, day: string): string {
+  const p = nextPlan(data, day);
+  return p?.emoji && !data.hidden ? p.emoji : '📅';
+}
+
 export function planLabel(data: WidgetData, day: string): string {
   const p = nextPlan(data, day);
   if (!p) return 'Nothing planned yet';
@@ -130,7 +136,7 @@ function Together({ data, day, look, height }: { data: WidgetData; day: string; 
       <FlexWidget style={{ flex: 1, width: 'match_parent' }} />
       <FlexWidget style={{ width: 'match_parent', flexDirection: 'column', flexGap: 5 }}>
         {roomy ? <Chip text={moodLabel(data, day)} look={look} /> : null}
-        <Chip text={`📅 ${planLabel(data, day)}`} look={look} />
+        <Chip text={`${planEmoji(data, day)} ${planLabel(data, day)}`} look={look} />
       </FlexWidget>
     </Frame>
   );
@@ -161,7 +167,7 @@ function Countdown({ data, day, look, width, height }: { data: WidgetData; day: 
   const n = daysFrom(day, p.start);
   const big = p.start < day ? 'On now' : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : String(n);
   const sub = n > 1 ? 'days to go' : p.time && n >= 0 ? timeLabel(p.time) : '';
-  const title = data.hidden ? 'Your next plan' : p.title;
+  const title = data.hidden ? 'Your next plan' : p.emoji ? `${p.emoji} ${p.title}` : p.title;
   const size = big.length > 3 ? (small ? 22 : 26) : small ? 36 : 48;
   return (
     <Frame look={look} label={`${title}, ${whenLabel(p, day)}`} click="OPEN_URI" uri={`lovebirds:///calendar?day=${p.start < day ? day : p.start}`} padding={12}>
