@@ -158,7 +158,15 @@ export async function saveCheckin(coupleId: string, rose: string, thorn: string,
 
 /* Photo of the day ------------------------------------------------------- */
 
-export type DailyPhoto = { day: string; user_id: string; photo_path: string | null; caption: string | null; created_at: string };
+export type DailyPhoto = {
+  day: string;
+  user_id: string;
+  photo_path: string | null;
+  caption: string | null;
+  created_at: string;
+  /** When the other person liked this photo. Missing until photo-likes.sql has run. */
+  liked_at?: string | null;
+};
 export type PhotoDay = { day: string; mine: DailyPhoto | null; partner: DailyPhoto | null };
 
 /** Today's photos and the last few days. Your partner's stays hidden until you've added yours. */
@@ -199,6 +207,12 @@ export async function saveDailyPhoto(coupleId: string, userId: string, photoPath
   if (data?.length) return;
   const { error: err } = await supabase.from('daily_photos').insert({ couple_id: coupleId, day, ...changes });
   if (err) throw err;
+}
+
+/** Likes or unlikes your partner's photo for a day. The first like notifies them. */
+export async function likeDailyPhoto(day: string, like: boolean) {
+  const { error } = await supabase.rpc('like_daily_photo', { p_day: day, p_like: like });
+  if (error) throw error;
 }
 
 /* Today's sweet gesture -------------------------------------------------- */
