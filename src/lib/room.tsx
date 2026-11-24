@@ -14,11 +14,21 @@ type Room = {
   typing: () => void;
   /** Tell your partner you've stopped (for example, you sent the message). */
   stopTyping: () => void;
-  /** Float hearts up both screens. */
-  sendHearts: () => void;
+  /** Float hearts up both screens, or one of the chat reactions instead of hearts. */
+  sendHearts: (emoji?: string) => void;
   /** Goes up by one each time hearts should float on this screen. */
   hearts: number;
+  /** What floats with the latest burst: a reaction emoji, or null for hearts. */
+  heartsEmoji: string | null;
 };
+
+/** The chat reactions. Each one floats up both screens when you pick it. */
+export const REACTIONS = ['❤️', '😂', '😍', '🥺', '😮', '🔥', '👍'];
+
+/** Hearts float as heart shapes; any other reaction floats as itself. */
+function floatEmoji(emoji: unknown): string | null {
+  return typeof emoji === 'string' && emoji !== '❤️' && REACTIONS.includes(emoji) ? emoji : null;
+}
 
 const RoomContext = createContext<Room>({
   partnerOnline: false,
@@ -27,6 +37,7 @@ const RoomContext = createContext<Room>({
   stopTyping: () => {},
   sendHearts: () => {},
   hearts: 0,
+  heartsEmoji: null,
 });
 
 /**
@@ -38,6 +49,7 @@ export function RoomProvider({ coupleId, userId, children }: { coupleId: string 
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [hearts, setHearts] = useState(0);
+  const [heartsEmoji, setHeartsEmoji] = useState<string | null>(null);
   const channel = useRef<RealtimeChannel | null>(null);
   const lastTyping = useRef(0);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -65,6 +77,7 @@ export function RoomProvider({ coupleId, userId, children }: { coupleId: string 
       })
       .on('broadcast', { event: 'hearts' }, ({ payload }) => {
         if (payload?.from === userId) return;
+        setHeartsEmoji(floatEmoji(payload?.emoji));
         setHearts((n) => n + 1);
         heartbeat();
       })
@@ -96,12 +109,19 @@ export function RoomProvider({ coupleId, userId, children }: { coupleId: string 
     channel.current?.send({ type: 'broadcast', event: 'typing', payload: { from: userId, on: false } });
   }, [userId]);
 
-  const sendHearts = useCallback(() => {
-    setHearts((n) => n + 1);
-    channel.current?.send({ type: 'broadcast', event: 'hearts', payload: { from: userId } });
-  }, [userId]);
+  const sendHearts = useCallback(
+    (emoji?: string) => {
+      setHeartsEmoji(floatEmoji(emoji));
+      setHearts((n) => n + 1);
+      channel.current?.send({ type: 'broadcast', event: 'hearts', payload: { from: userId, emoji: emoji ?? '❤️' } });
+    },
+    [userId],
+  );
 
-  const value = useMemo(() => ({ partnerOnline, partnerTyping, typing, stopTyping, sendHearts, hearts }), [partnerOnline, partnerTyping, typing, stopTyping, sendHearts, hearts]);
+  const value = useMemo(
+    () => ({ partnerOnline, partnerTyping, typing, stopTyping, sendHearts, hearts, heartsEmoji }),
+    [partnerOnline, partnerTyping, typing, stopTyping, sendHearts, hearts, heartsEmoji],
+  );
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
 }
 

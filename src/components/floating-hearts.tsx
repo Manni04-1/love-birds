@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Text, useWindowDimensions, View } from 'react-native';
 
 import { HeartShape, useReducedMotion } from '@/components/hero';
 import { useColors } from '@/lib/theme';
@@ -19,20 +19,25 @@ function makeFloaters(): Floater[] {
   }));
 }
 
-function Floating({ f, t, height, width, colors }: { f: Floater; t: Animated.Value; height: number; width: number; colors: string[] }) {
+function Floating({ f, t, height, width, colors, emoji }: { f: Floater; t: Animated.Value; height: number; width: number; colors: string[]; emoji: string | null }) {
   const translateY = t.interpolate({ inputRange: [0, 1], outputRange: [0, -height * 0.85] });
   const translateX = t.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, f.sway, 0, -f.sway, 0] });
   const opacity = t.interpolate({ inputRange: [0, 0.08, 0.7, 1], outputRange: [0, 1, 0.9, 0] });
   const scale = t.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0.4, 1.1, 0.85] });
   return (
     <Animated.View style={{ position: 'absolute', left: f.x * width - f.size / 2, bottom: 40, opacity, transform: [{ translateY }, { translateX }, { scale }] }}>
-      <HeartShape size={f.size} color={colors[f.tint]} />
+      {emoji ? (
+        // The phone's own font, so the emoji draws in colour.
+        <Text style={{ fontSize: f.size * 1.15, lineHeight: f.size * 1.5 }}>{emoji}</Text>
+      ) : (
+        <HeartShape size={f.size} color={colors[f.tint]} />
+      )}
     </Animated.View>
   );
 }
 
-/** Hearts that drift up the whole screen each time `burst` goes up. */
-export function FloatingHearts({ burst }: { burst: number }) {
+/** Hearts that drift up the whole screen each time `burst` goes up. Pass an emoji to float that instead. */
+export function FloatingHearts({ burst, emoji = null }: { burst: number; emoji?: string | null }) {
   const c = useColors();
   const { width, height } = useWindowDimensions();
   const reduced = useReducedMotion();
@@ -57,7 +62,7 @@ export function FloatingHearts({ burst }: { burst: number }) {
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 50 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {floaters.map((f, i) => (
-        <Floating key={i} f={f} t={values[i]} height={height} width={width} colors={colors} />
+        <Floating key={i} f={f} t={values[i]} height={height} width={width} colors={colors} emoji={emoji} />
       ))}
     </View>
   );

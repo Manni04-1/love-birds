@@ -19,14 +19,13 @@ import { addDays, clockLabel, dayLabel, toISODate, today } from '@/lib/dates';
 import { whileAway } from '@/lib/lock';
 import { setChatOpen } from '@/lib/notifications';
 import { pickPhoto, uploadPhoto } from '@/lib/photos';
-import { useRoom } from '@/lib/room';
+import { REACTIONS, useRoom } from '@/lib/room';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
 import { alpha, radius, space, tabBarInset, useColors } from '@/lib/theme';
 import type { Message, Reaction } from '@/lib/types';
 import { deleteRecording, durationLabel, uploadVoiceNote } from '@/lib/voice';
 
-const REACTIONS = ['❤️', '😂', '😍', '🥺', '😮', '🔥', '👍'];
 const EDIT_WINDOW = 15 * 60 * 1000;
 /** How many of the newest messages the chat loads when it opens, and how many more each time you reach the top. */
 const NEWEST = 200;
@@ -408,7 +407,7 @@ export default function Chat() {
       map.set(m.id, next ? [...list, { message_id: m.id, user_id: userId, emoji: next, updated_at: new Date().toISOString() }] : list);
       return map;
     });
-    if (next === '❤️') room.sendHearts();
+    if (next) room.sendHearts(next);
     const { error: err } = await supabase.rpc('react_to_message', { p_message: m.id, p_emoji: next });
     if (err) {
       setError(friendlyError(err));

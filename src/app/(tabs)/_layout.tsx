@@ -14,13 +14,13 @@ import { useColors } from '@/lib/theme';
 import { useUnreadCount } from '@/lib/unread';
 import { useWidgetSync } from '@/widgets/sync';
 
-/** Hearts your partner sends float up whichever tab you're on. */
+/** Hearts (or a reaction) your partner sends float up whichever tab you're on. */
 function Hearts({ children }: { children: ReactNode }) {
-  const { hearts } = useRoom();
+  const { hearts, heartsEmoji } = useRoom();
   return (
     <View style={{ flex: 1 }}>
       {children}
-      <FloatingHearts burst={hearts} />
+      <FloatingHearts burst={hearts} emoji={heartsEmoji} />
     </View>
   );
 }
