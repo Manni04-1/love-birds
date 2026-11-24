@@ -151,12 +151,15 @@ export function MemoryBook(props: Props) {
     });
   });
 
-  // The pages around this one stay drawn, so their photos are ready when you turn to them.
-  const shown = [at - 1, at, at + 1].filter((i) => i >= 0 && i < pages.length);
+  // Only the page you're on is drawn, plus the one underneath while a page turns.
   const over = turning === 'next' ? at : turning === 'prev' ? at - 1 : null;
   const under = turning === 'next' ? at + 1 : turning === 'prev' ? at : at;
+  const shown = (turning === null ? [at] : [under, over as number]).filter((i) => i >= 0 && i < pages.length);
 
-  const rotateY = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-180deg'] });
+  // The turning page folds in towards the spine: it narrows from its left edge, a flat
+  // (2D) take on a page turn that Android draws safely. Never quite zero wide.
+  const fold = turn.interpolate({ inputRange: [0, 1], outputRange: [1, 0.02] });
+  const foldFade = turn.interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0] });
   const foldShade = turn.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.32, 0.32] });
   const underShade = turn.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0] });
 
@@ -179,8 +182,8 @@ export function MemoryBook(props: Props) {
               accessibilityElementsHidden={!(turning === null && i === at)}
               style={[
                 { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: visible ? 1 : 0, zIndex: isOver ? 2 : visible ? 1 : 0 },
-                // The page hinges on its left edge: shift that edge to the middle, turn, and shift back.
-                isOver && width > 0 ? { backfaceVisibility: 'hidden', transform: [{ perspective: 1400 }, { translateX: -width / 2 }, { rotateY }, { translateX: width / 2 }] } : null,
+                // The page hinges on its left edge: shift that edge to the middle, narrow it, and shift back.
+                isOver && width > 0 ? { opacity: foldFade, transform: [{ translateX: -width / 2 }, { scaleX: fold }, { translateX: width / 2 }] } : null,
               ]}>
               <PageView page={page} {...props} memoryCount={memoryCount} onOpenBook={() => go('next')} onNewest={() => jump(pages.length - 2)} onStart={() => jump(1)} />
               {isOver ? <Animated.View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000', opacity: foldShade, borderRadius: 18 }} /> : null}
@@ -450,7 +453,7 @@ function MemoryPage({ memory: m, number, userId, partnerName, comments, comments
             accessibilityState={{ selected: loved }}
             hitSlop={6}
             style={{ alignItems: 'center', transform: [{ rotate: '-6deg' }] }}>
-            <View style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderStyle: 'dashed', borderColor: loved ? c.accent : PAPER.muted, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: loved ? c.accent : PAPER.muted, alignItems: 'center', justifyContent: 'center' }}>
               <Glyph name={loved ? 'heart' : 'heartOutline'} color={loved ? c.accent : PAPER.muted} size={26} />
             </View>
             <Hand size={13} color={loved ? c.accent : PAPER.muted}>

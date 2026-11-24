@@ -37,6 +37,32 @@ const SOURCES: { key: Source | 'all'; label: string }[] = [
 
 /** Set while the memory book is on screen, so if Love Birds closes with it open, Memories starts on Timeline next time. */
 const BOOK_OPEN = 'memory-book-open';
+/** The last error that closed Love Birds while the book was open, shown once on Timeline so it can be fixed. */
+const BOOK_CRASH = 'memory-book-crash';
+
+type ErrorHandler = (error: unknown, isFatal?: boolean) => void;
+let crashHook = false;
+/** Notes down an error that would close the app while the book is open, then lets it carry on as before. */
+function recordBookCrashes() {
+  const eu = (globalThis as { ErrorUtils?: { getGlobalHandler: () => ErrorHandler; setGlobalHandler: (h: ErrorHandler) => void } }).ErrorUtils;
+  if (crashHook || !eu) return;
+  crashHook = true;
+  const before = eu.getGlobalHandler();
+  eu.setGlobalHandler((error, isFatal) => {
+    let passed = false;
+    const pass = () => {
+      if (passed) return;
+      passed = true;
+      before(error, isFatal);
+    };
+    const message = (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 240);
+    setTimeout(pass, 500);
+    AsyncStorage.getItem(BOOK_OPEN)
+      .then((v) => (v === '1' ? AsyncStorage.setItem(BOOK_CRASH, message) : undefined))
+      .catch(() => {})
+      .finally(pass);
+  });
+}
 
 /** If the book throws, show Timeline instead of the error. */
 class BookBoundary extends Component<{ children: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
@@ -126,13 +152,15 @@ export default function Memories() {
 
   useEffect(() => {
     let active = true;
-    AsyncStorage.getItem(BOOK_OPEN)
-      .then((v) => {
+    recordBookCrashes();
+    AsyncStorage.multiGet([BOOK_OPEN, BOOK_CRASH])
+      .then(([[, v], [, crash]]) => {
         if (!active) return;
         if (v === '1') {
-          setBookNote('Love Birds closed while the memory book was open, so Memories opened on Timeline. Tap Book to try it again.');
+          const why = crash ? ` (${crash})` : '';
+          setBookNote(`Love Birds closed while the memory book was open, so Memories opened on Timeline. Tap Book to try it again.${why}`);
           setMode('timeline');
-          AsyncStorage.removeItem(BOOK_OPEN).catch(() => {});
+          AsyncStorage.multiRemove([BOOK_OPEN, BOOK_CRASH]).catch(() => {});
         } else setMode('book');
       })
       .catch(() => active && setMode('book'));
