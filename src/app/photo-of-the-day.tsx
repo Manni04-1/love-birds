@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -313,6 +313,14 @@ export default function PhotoOfTheDay() {
                 <T variant="fine" style={{ textAlign: 'center' }}>
                   {`Double tap ${partner.name}'s photo to like it.`}
                 </T>
+              ) : null}
+              {t.partner?.photo_path ? (
+                <Button
+                  title={`Reply to ${partner.name} in chat`}
+                  variant="outline"
+                  icon={<Glyph name="reply" color={c.ink} size={18} />}
+                  onPress={() => router.navigate({ pathname: '/chat', params: { photo: t.partner!.photo_path!, day: t.day } })}
+                />
               ) : null}
               <ErrorText>{error}</ErrorText>
               <Button title="Swap my photo" variant="outline" onPress={() => setSwapping(true)} />

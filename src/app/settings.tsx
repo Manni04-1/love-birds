@@ -48,6 +48,12 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
 const LOOKS: { look: BubbleStyle; label: string; sample: string }[] = [
   { look: 'hearts', label: 'Fuchsia with hearts', sample: 'Miss you 💕' },
   { look: 'roses', label: 'Vines and roses', sample: 'Miss you too' },
+  { look: 'stars', label: 'Starry night', sample: 'Goodnight ✨' },
+  { look: 'waves', label: 'Ocean waves', sample: 'Beach soon?' },
+  { look: 'letter', label: 'Love letter', sample: 'Yours always' },
+  { look: 'clouds', label: 'Cloud nine', sample: 'So happy!' },
+  { look: 'daisies', label: 'Daisy chain', sample: 'Hello sunshine' },
+  { look: 'bamboo', label: 'Bamboo and panda', sample: 'Hug me' },
 ];
 
 function BubbleChoice({ look, label, sample, selected, onPress }: { look: BubbleStyle; label: string; sample: string; selected: boolean; onPress: () => void }) {
@@ -59,8 +65,8 @@ function BubbleChoice({ look, label, sample, selected, onPress }: { look: Bubble
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       accessibilityLabel={label}
-      style={{ flex: 1, alignItems: 'center', gap: space.sm, paddingVertical: space.md, borderRadius: radius.md, borderWidth: 2, borderColor: selected ? c.accent : c.line, backgroundColor: c.page }}>
-      <LoveBubble look={look} mine={look === 'hearts'}>
+      style={{ width: '48%', flexGrow: 1, alignItems: 'center', gap: space.sm, paddingVertical: space.md, borderRadius: radius.md, borderWidth: 2, borderColor: selected ? c.accent : c.line, backgroundColor: c.page }}>
+      <LoveBubble look={look} mine={LOOKS.findIndex((l) => l.look === look) % 2 === 0}>
         <T color={bubbleInk(look, dark).text} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
           {sample}
         </T>
@@ -432,7 +438,7 @@ export default function Settings() {
           <T variant="small" muted>
             Your messages show in this style on both phones. {partner.name} picks their own.
           </T>
-          <Row gap={space.sm} style={{ alignItems: 'stretch' }}>
+          <Row gap={space.sm} style={{ alignItems: 'stretch', flexWrap: 'wrap' }}>
             {LOOKS.map((l) => (
               <BubbleChoice key={l.look} {...l} selected={profile.bubble === l.look} onPress={() => chooseBubble(l.look)} />
             ))}

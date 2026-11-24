@@ -1,6 +1,6 @@
 import type { IdeaCategory } from '@/content/ideas';
 
-export type BubbleStyle = 'hearts' | 'roses';
+export type BubbleStyle = 'hearts' | 'roses' | 'stars' | 'waves' | 'letter' | 'clouds' | 'daisies' | 'bamboo';
 
 export type Profile = {
   id: string;
@@ -81,6 +81,12 @@ export type Message = {
   audio_ms?: number | null;
   /** An animal sticker, such as lion:miss-you. */
   sticker?: string | null;
+  /** The photo of the day this message answers, and the day it was for. */
+  quote_photo?: string | null;
+  quote_day?: string | null;
+  /** When the message was pinned to the top of the chat, and by whom. */
+  pinned_at?: string | null;
+  pinned_by?: string | null;
 };
 
 /** One person's reaction to a message. A null emoji means it was taken back. */
