@@ -545,7 +545,7 @@ function HeartRibbon({ height, reduced }: { height: number; reduced: boolean }) 
   );
 }
 
-function GoldenScene({ dark, height, reduced }: SceneProps) {
+function GoldenScene({ dark, height, reduced, roo = false }: SceneProps & { roo?: boolean }) {
   const h = height;
   const wl = W * 0.22;
   const wr = W * 0.8;
@@ -582,7 +582,7 @@ function GoldenScene({ dark, height, reduced }: SceneProps) {
         <Path d={`M0 ${h * 0.05} L${W * 0.12} 0 L${W * 0.5} ${h} L${W * 0.34} ${h} Z`} fill="#FFF4D6" opacity={dark ? 0.06 : 0.16} />
         <Path d={`M${W * 0.62} 0 L${W * 0.7} 0 L${W} ${h * 0.62} L${W} ${h * 0.82} Z`} fill="#FFF4D6" opacity={dark ? 0.05 : 0.12} />
         {/* Bamboo up the right-hand wall, for the panda. */}
-        <G opacity={dark ? 0.7 : 0.85}>
+        <G display={roo ? undefined : 'none'} opacity={dark ? 0.7 : 0.85}>
           {bamboo.stalks.map((d, i) => (
             <Path key={`s${i}`} d={d} stroke={dark ? '#4E6B32' : '#6E8F3A'} strokeWidth={6} strokeLinecap="round" />
           ))}
@@ -598,15 +598,27 @@ function GoldenScene({ dark, height, reduced }: SceneProps) {
         <Twinkle key={i} x={x} y={h * y} size={s} color="#FFE6A8" delay={d} duration={2600 + (i % 3) * 500} reduced={reduced} />
       ))}
       <HeartRibbon height={h} reduced={reduced} />
-      <LeafSpray x="-6%" y={-30} dark={dark} reduced={reduced} delay={800} />
+      {roo ? null : <LeafSpray x="-5%" y={h - 82} dark={dark} reduced={reduced} delay={0} />}
+      {roo ? null : <LeafSpray x="84%" y={h - 86} flip dark={dark} reduced={reduced} delay={1600} />}
+      {roo ? null : <LeafSpray x="86%" y={-26} flip dark={dark} reduced={reduced} delay={800} />}
+      {roo ? <LeafSpray x="-6%" y={-30} dark={dark} reduced={reduced} delay={800} /> : null}
+      {roo ? (
+        <>
       <Sitter left="3%" bottom={h * 0.97} size={Math.min(92, h * 0.4)} lean={3} delay={0} reduced={reduced}>
         <KangarooArt size={Math.min(92, h * 0.4)} dark={dark} />
       </Sitter>
       <Sitter left="74%" bottom={h * 0.97} size={Math.min(92, h * 0.4)} lean={-3} delay={1200} reduced={reduced}>
         <PandaArt size={Math.min(92, h * 0.4)} dark={dark} />
       </Sitter>
+        </>
+      ) : null}
     </>
   );
+}
+
+/** Roo & Panda: Golden Hour with a kangaroo and a panda sitting on the steps. */
+function RooScene(p: SceneProps) {
+  return <GoldenScene {...p} roo />;
 }
 
 /* Shared ------------------------------------------------------------------ */
@@ -639,6 +651,7 @@ const SCENES: Record<ThemeName, (p: SceneProps) => ReactNode> = {
   diani: DianiScene,
   starry: StarryScene,
   golden: GoldenScene,
+  roo: RooScene,
 };
 
 /** Text colour that reads well on each scene. */

@@ -293,7 +293,7 @@ function StarryMotif({ w, h, dark, c, id }: Motif) {
 
 /* Golden Hour: sunbeams, a ribbon of hearts, sparkles and leaves --------- */
 
-function GoldenMotif({ w, h, dark, c, id }: Motif) {
+function GoldenMotif({ w, h, dark, c, id, roo = false }: Motif & { roo?: boolean }) {
   const rand = seeded(1124);
   const sparkles = Array.from({ length: 9 }, () => ({ x: rand() * w, y: rand() * h * 0.9, size: 3 + rand() * 4 }));
   const leaves = (x: number, y: number, flip: number) =>
@@ -311,6 +311,16 @@ function GoldenMotif({ w, h, dark, c, id }: Motif) {
         <Sparkle key={i} {...s} color={c.accent2} opacity={dark ? 0.4 : 0.45} />
       ))}
       {leaves(0, h, 1)}
+      {roo ? null : leaves(w, h * 0.55, -1)}
+      {roo ? <RooExtras w={w} h={h} dark={dark} c={c} /> : null}
+    </>
+  );
+}
+
+/** Bamboo for the panda and a trail of footprints, for Roo & Panda. */
+function RooExtras({ w, h, dark, c }: { w: number; h: number; dark: boolean; c: Colors }) {
+  return (
+    <>
       {/* Bamboo up the right edge, for the panda. */}
       {[0, 12].map((dx, k) => (
         <G key={`b${k}`} opacity={dark ? 0.2 : 0.16}>
@@ -373,6 +383,7 @@ const MOTIFS: Record<ThemeName, (m: Motif) => ReactNode> = {
   diani: DianiMotif,
   starry: StarryMotif,
   golden: GoldenMotif,
+  roo: (m: Motif) => <GoldenMotif {...m} roo />,
 };
 
 /**

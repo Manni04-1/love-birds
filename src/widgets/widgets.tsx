@@ -22,6 +22,7 @@ const LOOKS: Record<string, { light: Look; dark: Look }> = {
   diani: { light: { from: '#7FD3F2', to: '#D9F5FC', ...ON_LIGHT }, dark: { from: '#0A1F3B', to: '#12405A', ...ON_DARK } },
   starry: { light: { from: '#6A5BD0', to: '#2B2470', ...ON_DARK }, dark: { from: '#1C1C52', to: '#0B0B22', ...ON_DARK } },
   golden: { light: { from: '#FFB45C', to: '#B4530F', ...ON_DARK }, dark: { from: '#3A1D0C', to: '#160D07', ...ON_DARK } },
+  roo: { light: { from: '#FFB45C', to: '#B4530F', ...ON_DARK }, dark: { from: '#3A1D0C', to: '#160D07', ...ON_DARK } },
 };
 
 // Fonts copied into the app by the widget plugin in app.json, found by file name.
