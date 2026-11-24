@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { reportProblem } from '@/lib/crash-reports';
 import { router, useFocusEffect } from 'expo-router';
 import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Alert, AppState, FlatList, Pressable, ScrollView, View } from 'react-native';
@@ -467,6 +468,7 @@ export default function Memories() {
         loaded ? (
           <BookBoundary
             onError={(message) => {
+              reportProblem('Memory book', new Error(message), 'Memories > Book fell back to Timeline');
               setBookNote(`The memory book ran into a problem, so here's Timeline. (${message})`);
               setMode('timeline');
             }}>

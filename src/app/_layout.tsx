@@ -13,22 +13,33 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppLock } from '@/components/app-lock';
 import { Intro } from '@/components/intro';
+import { installProblemReports, sendProblemReports } from '@/lib/crash-reports';
 import { SessionProvider, useSession } from '@/lib/session';
 import { FontNameProvider, isFontName, isThemeName, setCustomFonts, ThemeNameProvider, useColors } from '@/lib/theme';
 import { useAppUpdates } from '@/lib/updates';
 
 SplashScreen.preventAutoHideAsync();
+installProblemReports();
 
 function Routes() {
-  const { ready, session, partner } = useSession();
+  const { ready, session, partner, couple } = useSession();
   const c = useColors();
   useAppUpdates();
+
+  // Sends notes of anything that went wrong last time, once you're signed in.
+  const signedInId = session?.user.id;
+  const coupleId = couple?.id;
+  useEffect(() => {
+    if (!signedInId) return;
+    const t = setTimeout(() => sendProblemReports(coupleId), 4000);
+    return () => clearTimeout(t);
+  }, [signedInId, coupleId]);
 
   // The splash screen hands over to the opening animation (Intro), which fades out once this is ready.
   if (!ready) return null;
