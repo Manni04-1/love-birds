@@ -7,7 +7,7 @@ A private app for two: a shared calendar, a chat, a timeline of memories and pho
 ### 1. Set up the database
 
 1. Create a free account at [supabase.com](https://supabase.com) and make a new project. Pick the region closest to you.
-2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success". Then do the same with [`supabase/notifications.sql`](supabase/notifications.sql), then [`supabase/together.sql`](supabase/together.sql), [`supabase/daily.sql`](supabase/daily.sql), [`supabase/engage.sql`](supabase/engage.sql), [`supabase/extras.sql`](supabase/extras.sql), [`supabase/calendar.sql`](supabase/calendar.sql), [`supabase/plan-icons.sql`](supabase/plan-icons.sql), [`supabase/chimes.sql`](supabase/chimes.sql), [`supabase/photo-likes.sql`](supabase/photo-likes.sql), [`supabase/memory-comments.sql`](supabase/memory-comments.sql), and then [`supabase/golden-theme.sql`](supabase/golden-theme.sql).
+2. In the project, open **SQL Editor**, click **New query**, paste everything from [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. It should say "Success". Then do the same with [`supabase/notifications.sql`](supabase/notifications.sql), then [`supabase/together.sql`](supabase/together.sql), [`supabase/daily.sql`](supabase/daily.sql), [`supabase/engage.sql`](supabase/engage.sql), [`supabase/extras.sql`](supabase/extras.sql), [`supabase/calendar.sql`](supabase/calendar.sql), [`supabase/plan-icons.sql`](supabase/plan-icons.sql), [`supabase/chimes.sql`](supabase/chimes.sql), [`supabase/photo-likes.sql`](supabase/photo-likes.sql), [`supabase/memory-comments.sql`](supabase/memory-comments.sql), [`supabase/golden-theme.sql`](supabase/golden-theme.sql), and then [`supabase/app-errors.sql`](supabase/app-errors.sql).
 3. While you're testing, turn off email confirmation so you can sign in straight away: **Authentication > Sign In / Providers > Email**, switch off **Confirm email**, and save. Turn it back on before you invite other couples.
 
 ### 2. Connect the app to the database
@@ -87,7 +87,7 @@ Android only lets a new file update an installed app if both are signed with the
 | Rose, thorn and bud | An evening check-in: the best bit of your day, the hard bit, and something you're looking forward to. Hidden until you've both shared |
 | Photo of the day | One photo from your day each, from the camera or the gallery. Your partner's stays hidden until you've added yours. You can swap yours the same day. Double tap your partner's photo (or tap the heart) to like it, which sends them a notification; tap a photo to see it full screen |
 | Sweet gesture | A small idea each day for something kind to do. You each get a different one, so it stays a surprise |
-| Themes | Rose, Steampunk, Meadow, Serengeti, Diani Beach and Starry Night, each with a light and a dark look. You each pick your own |
+| Themes | Rose, Steampunk, Meadow, Serengeti, Diani Beach, Starry Night and Golden Hour, each with a light and a dark look. You each pick your own |
 | Calendar | Month view, add plans with date, time and a note, long press to delete. Updates live when your partner adds something |
 | Chat | Text, photos and voice notes (tap the mic, up to 5 minutes), double tap a message to heart it, hold it to react (the reaction you pick floats up both screens), "Seen" receipts, live updates. Each of you picks a bubble: fuchsia with hearts, or thorny vines and roses |
 | Home-screen widgets (Android) | Love Birds (4 × 2): your animals, days together, how your partner feels and your next plan. Countdown (2 × 2): days to go until your next plan. Thinking of you (2 × 1): one tap sends the heartbeat. Add them from Settings or from your home screen's widget list. With private notifications on, they leave out plan names and mood words |
@@ -99,6 +99,8 @@ Android only lets a new file update an installed app if both are signed with the
 | After dark | Flirty and Erotic questions appear only once you have both switched them on in Settings. The app only shows what's on for you both |
 | App lock | A 4-digit PIN, with fingerprint unlock if the phone has one. Locks right away, after 1 minute or after 5 minutes away. After five wrong PINs you wait a minute, then longer. Forgot PIN signs you out, which removes the lock. The PIN is kept in the phone's secure storage and never leaves it |
 | Settings | Change your name, your theme, the app lock, your bubble, your together-since date and After dark, the evening reminder, test notifications, check for updates, sign out, unlink, delete account |
+| Problem reports | If the app closes by itself or something breaks, it notes down what went wrong (including Android's own record of crashes) and sends it to the `app_errors` table next time it opens. **Settings > Problem reports** lists the couple's recent reports; tap one to copy it |
+| Smaller uploads | Photos are shrunk before they upload (long side at most 2048 pixels, JPEG), about five times smaller, and voice notes record at 32 kbps. Photos already sent stay as they are |
 
 Privacy: every table has row-level security, so only the two people in a couple can read its data. Photos sit in a private storage bucket, one folder per couple, and open through short-lived links.
 
