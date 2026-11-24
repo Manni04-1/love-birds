@@ -52,6 +52,7 @@ const TABLES: { table: string; order: string[]; couple?: false }[] = [
   { table: 'free_days', order: ['day', 'user_id'] },
   { table: 'memories', order: ['happened_on', 'id'] },
   { table: 'memory_loves', order: ['memory_id', 'user_id'], couple: false },
+  { table: 'memory_comments', order: ['created_at', 'id'] },
   { table: 'milestones', order: ['happened_on', 'id'] },
   { table: 'moods', order: ['day', 'user_id'] },
   { table: 'nudges', order: ['id'] },

@@ -91,6 +91,16 @@ export function T({
 
 const DISPLAY = new Set<Variant>(['display', 'title', 'heading']);
 
+/** Handwriting, as in the memory book. Uses the phone's font until the app's fonts have loaded. */
+export function Hand({ size = 18, color, style, children, ...rest }: TextProps & { size?: number; color: string }) {
+  const font = fontFor(700, true, 'handwritten');
+  return (
+    <Text style={[{ fontSize: size, lineHeight: Math.round(size * 1.4), color }, style, font]} {...rest}>
+      {font.fontFamily ? withPhoneEmoji(children) : children}
+    </Text>
+  );
+}
+
 /* Layout ----------------------------------------------------------------- */
 
 export function Card({

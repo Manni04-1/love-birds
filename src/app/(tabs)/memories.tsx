@@ -5,20 +5,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
 import { Photo } from '@/components/photo';
+import { MemoryBook } from '@/components/memory-book';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
-import { Chip, Empty, Glyph, IconButton, Row, T } from '@/components/ui';
+import { Button, Chip, Empty, ErrorText, Field, Glyph, IconButton, Row, Sheet, T } from '@/components/ui';
 import { parseISODate, shortDate, toISODate, today } from '@/lib/dates';
+import { useMemoryComments, type MemoryComment } from '@/lib/memory-comments';
 import { useCouple } from '@/lib/session';
-import { supabase } from '@/lib/supabase';
+import { friendlyError, supabase } from '@/lib/supabase';
 import { radius, space, tabBarInset, useColors } from '@/lib/theme';
 import type { Memory } from '@/lib/types';
 
 const monthOf = (iso: string) => parseISODate(iso).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
-type Mode = 'timeline' | 'album' | 'places';
+type Mode = 'book' | 'timeline' | 'album' | 'places';
 const MODES: { key: Mode; label: string }[] = [
+  { key: 'book', label: 'Book' },
   { key: 'timeline', label: 'Timeline' },
-  { key: 'album', label: 'Album' },
+  { key: 'album', label: 'Photos' },
   { key: 'places', label: 'Places' },
 ];
 
@@ -60,7 +63,12 @@ export default function Memories() {
   const coupleId = ctx?.couple.id;
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [mode, setMode] = useState<Mode>('timeline');
+  const [mode, setMode] = useState<Mode>('book');
+  const notes = useMemoryComments(coupleId);
+  const [commenting, setCommenting] = useState<Memory | null>(null);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [commentError, setCommentError] = useState('');
   const [source, setSource] = useState<Source | 'all'>('all');
   const [extra, setExtra] = useState<AlbumPhoto[]>([]);
   const [viewer, setViewer] = useState<{ photos: ViewerPhoto[]; start: number; slideshow?: boolean } | null>(null);
@@ -141,7 +149,28 @@ export default function Memories() {
   }, [coupleId, load]);
 
   if (!ctx) return null;
-  const { userId, partner } = ctx;
+  const { userId, partner, profile, couple } = ctx;
+
+  async function sendComment() {
+    if (!commenting || !draft.trim()) return;
+    setSending(true);
+    setCommentError('');
+    try {
+      await notes.add(commenting.id, draft);
+      setDraft('');
+      setCommenting(null);
+    } catch (e) {
+      setCommentError(friendlyError(e));
+    }
+    setSending(false);
+  }
+
+  function confirmDeleteComment(cm: MemoryComment) {
+    Alert.alert('Delete your comment?', 'It will disappear for both of you.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => notes.remove(cm.id).catch(() => {}) },
+    ]);
+  }
 
   const openMemoryPhoto = (m: Memory) => {
     const start = memoryPhotos.findIndex((p) => p.path === m.photo_path);
@@ -346,7 +375,46 @@ export default function Memories() {
         </Row>
       </Row>
       <Segments value={mode} onChange={setMode} />
-      {mode === 'timeline' ? timeline : mode === 'album' ? albumView : placesView}
+      {mode === 'book' ? (
+        loaded ? (
+          <MemoryBook
+            memories={memories}
+            userId={userId}
+            myName={profile.name}
+            partnerName={partner.name}
+            togetherSince={couple.together_since}
+            comments={notes.comments}
+            commentsReady={notes.ready}
+            onOpenPhoto={openMemoryPhoto}
+            onToggleLove={toggleLove}
+            onLongPressPage={confirmDelete}
+            onComment={(m) => {
+              setCommentError('');
+              setCommenting(m);
+            }}
+            onDeleteComment={confirmDeleteComment}
+            onAdd={() => router.push('/new-memory')}
+            bottomInset={tabBarInset + space.sm}
+          />
+        ) : null
+      ) : mode === 'timeline' ? (
+        timeline
+      ) : mode === 'album' ? (
+        albumView
+      ) : (
+        placesView
+      )}
+      <Sheet open={commenting !== null} onClose={() => setCommenting(null)}>
+        <T variant="heading">Write a comment</T>
+        {commenting ? (
+          <T variant="small" muted numberOfLines={2}>
+            {`On "${commenting.caption}"`}
+          </T>
+        ) : null}
+        <Field label="Your comment" value={draft} onChangeText={setDraft} maxLength={500} multiline autoFocus placeholder="Remember how we laughed..." />
+        <ErrorText>{commentError}</ErrorText>
+        <Button title="Add to the page" onPress={sendComment} loading={sending} disabled={!draft.trim()} />
+      </Sheet>
       <PhotoViewer photos={viewer?.photos ?? []} start={viewer ? viewer.start : null} slideshow={viewer?.slideshow} onClose={() => setViewer(null)} />
     </SafeAreaView>
   );
