@@ -17,8 +17,8 @@ import { deleteRecording, durationLabel, VOICE_LIMIT, waveform } from '@/lib/voi
 
 /* Recording --------------------------------------------------------------- */
 
-// Voice, not music: one channel at 64 kbps is clear and keeps five minutes under 2.5 MB.
-const OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, bitRate: 64000, isMeteringEnabled: true };
+// Voice, not music: one channel at 32 kbps sounds just as clear and keeps five minutes under 1.2 MB.
+const OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, sampleRate: 22050, bitRate: 32000, isMeteringEnabled: true };
 const LEVEL_BARS = 32;
 
 type Phase = 'starting' | 'recording' | 'stopped' | 'sending';

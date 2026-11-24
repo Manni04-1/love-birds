@@ -1,5 +1,5 @@
-import { decode } from 'base64-arraybuffer';
 import { File, Paths } from 'expo-file-system';
+import { ImageManipulator, SaveFormat, type ImageManipulatorContext, type ImageRef } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Asset, requestPermissionsAsync } from 'expo-media-library';
 import { useEffect, useState } from 'react';
@@ -8,24 +8,44 @@ import { Platform } from 'react-native';
 import { whileAway } from './lock';
 import { supabase } from './supabase';
 
-export type PickedPhoto = { uri: string; base64: string; mimeType: string };
+export type PickedPhoto = { uri: string; mimeType: string };
 
-function toPicked(result: ImagePicker.ImagePickerResult): PickedPhoto | null {
-  if (result.canceled) return null;
-  const asset = result.assets[0];
-  if (!asset?.base64) return null;
-  return { uri: asset.uri, base64: asset.base64, mimeType: asset.mimeType ?? 'image/jpeg' };
+// Photos go up with their long side at most this many pixels: sharp enough to fill a phone
+// screen or print a 6×4, and about five times smaller than a camera's full size.
+const LONGEST = 2048;
+const QUALITY = 0.75;
+
+const web = Platform.OS === 'web';
+
+/** A smaller JPEG copy of a picked photo, or the photo as it is if it can't be made smaller. */
+async function shrink(asset: ImagePicker.ImagePickerAsset): Promise<PickedPhoto> {
+  const mimeType = asset.mimeType ?? 'image/jpeg';
+  // A GIF would lose its animation.
+  if (mimeType === 'image/gif') return { uri: asset.uri, mimeType };
+  let context: ImageManipulatorContext | undefined;
+  let image: ImageRef | undefined;
+  try {
+    // Big photos are scaled down while they're read, so the full size never sits in memory.
+    context = ImageManipulator.manipulate(asset.uri, { maxWidth: LONGEST, maxHeight: LONGEST });
+    image = await context.renderAsync();
+    const saved = await image.saveAsync({ compress: QUALITY, format: SaveFormat.JPEG });
+    return { uri: saved.uri, mimeType: 'image/jpeg' };
+  } catch {
+    return { uri: asset.uri, mimeType };
+  } finally {
+    image?.release();
+    context?.release();
+  }
+}
+
+async function toPicked(result: ImagePicker.ImagePickerResult): Promise<PickedPhoto | null> {
+  if (result.canceled || !result.assets[0]) return null;
+  return shrink(result.assets[0]);
 }
 
 /** Opens the phone's photo library. Returns null if the person cancels. */
 export async function pickPhoto(): Promise<PickedPhoto | null> {
-  const result = await whileAway(() =>
-    ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-      base64: true,
-    }),
-  );
+  const result = await whileAway(() => ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 }));
   return toPicked(result);
 }
 
@@ -35,13 +55,7 @@ export async function takePhoto(): Promise<PickedPhoto | null> {
   if (!perm.granted) {
     throw new Error(perm.canAskAgain ? 'Allow the camera to take a photo.' : 'The camera is turned off for Love Birds. Turn it on in your phone\'s settings.');
   }
-  const result = await whileAway(() =>
-    ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-      base64: true,
-    }),
-  );
+  const result = await whileAway(() => ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 }));
   return toPicked(result);
 }
 
@@ -49,9 +63,8 @@ export async function takePhoto(): Promise<PickedPhoto | null> {
 export async function uploadPhoto(coupleId: string, photo: PickedPhoto): Promise<string> {
   const ext = photo.mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'jpg';
   const path = `${coupleId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { error } = await supabase.storage.from('photos').upload(path, decode(photo.base64), {
-    contentType: photo.mimeType,
-  });
+  const data = web ? await (await fetch(photo.uri)).arrayBuffer() : await new File(photo.uri).arrayBuffer();
+  const { error } = await supabase.storage.from('photos').upload(path, data, { contentType: photo.mimeType });
   if (error) throw error;
   return path;
 }
