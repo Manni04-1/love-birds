@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, View } from 'react-native';
+import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Alert, AppState, FlatList, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
@@ -34,6 +35,23 @@ const SOURCES: { key: Source | 'all'; label: string }[] = [
   { key: 'chat', label: 'Chat' },
 ];
 
+/** Set while the memory book is on screen, so if Love Birds closes with it open, Memories starts on Timeline next time. */
+const BOOK_OPEN = 'memory-book-open';
+
+/** If the book throws, show Timeline instead of the error. */
+class BookBoundary extends Component<{ children: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    this.props.onError(error instanceof Error ? error.message : String(error));
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 function Segments({ value, onChange }: { value: Mode; onChange: (m: Mode) => void }) {
   const c = useColors();
   return (
@@ -63,7 +81,9 @@ export default function Memories() {
   const coupleId = ctx?.couple.id;
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [mode, setMode] = useState<Mode>('book');
+  // Decided once the crash check below has run, so a book that crashed isn't opened again straight away.
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [bookNote, setBookNote] = useState('');
   const notes = useMemoryComments(coupleId);
   const [commenting, setCommenting] = useState<Memory | null>(null);
   const [draft, setDraft] = useState('');
@@ -103,6 +123,35 @@ export default function Memories() {
     }
     setExtra(out);
   }, [coupleId, userId0]);
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(BOOK_OPEN)
+      .then((v) => {
+        if (!active) return;
+        if (v === '1') {
+          setBookNote('Love Birds closed while the memory book was open, so Memories opened on Timeline. Tap Book to try it again.');
+          setMode('timeline');
+          AsyncStorage.removeItem(BOOK_OPEN).catch(() => {});
+        } else setMode('book');
+      })
+      .catch(() => active && setMode('book'));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // While the book is on screen and the app is in front, remember that it's open.
+  useEffect(() => {
+    if (mode !== 'book') return;
+    const mark = (on: boolean) => (on ? AsyncStorage.setItem(BOOK_OPEN, '1') : AsyncStorage.removeItem(BOOK_OPEN)).catch(() => {});
+    mark(true);
+    const sub = AppState.addEventListener('change', (state) => mark(state === 'active'));
+    return () => {
+      sub.remove();
+      mark(false);
+    };
+  }, [mode]);
 
   useFocusEffect(
     useCallback(() => {
@@ -374,28 +423,45 @@ export default function Memories() {
           </IconButton>
         </Row>
       </Row>
-      <Segments value={mode} onChange={setMode} />
-      {mode === 'book' ? (
+      <Segments
+        value={mode ?? 'book'}
+        onChange={(m) => {
+          setBookNote('');
+          setMode(m);
+        }}
+      />
+      {bookNote ? (
+        <T variant="small" muted style={{ paddingHorizontal: space.lg, paddingBottom: space.sm }}>
+          {bookNote}
+        </T>
+      ) : null}
+      {mode === null ? null : mode === 'book' ? (
         loaded ? (
-          <MemoryBook
-            memories={memories}
-            userId={userId}
-            myName={profile.name}
-            partnerName={partner.name}
-            togetherSince={couple.together_since}
-            comments={notes.comments}
-            commentsReady={notes.ready}
-            onOpenPhoto={openMemoryPhoto}
-            onToggleLove={toggleLove}
-            onLongPressPage={confirmDelete}
-            onComment={(m) => {
-              setCommentError('');
-              setCommenting(m);
-            }}
-            onDeleteComment={confirmDeleteComment}
-            onAdd={() => router.push('/new-memory')}
-            bottomInset={tabBarInset + space.sm}
-          />
+          <BookBoundary
+            onError={(message) => {
+              setBookNote(`The memory book ran into a problem, so here's Timeline. (${message})`);
+              setMode('timeline');
+            }}>
+            <MemoryBook
+              memories={memories}
+              userId={userId}
+              myName={profile.name}
+              partnerName={partner.name}
+              togetherSince={couple.together_since}
+              comments={notes.comments}
+              commentsReady={notes.ready}
+              onOpenPhoto={openMemoryPhoto}
+              onToggleLove={toggleLove}
+              onLongPressPage={confirmDelete}
+              onComment={(m) => {
+                setCommentError('');
+                setCommenting(m);
+              }}
+              onDeleteComment={confirmDeleteComment}
+              onAdd={() => router.push('/new-memory')}
+              bottomInset={tabBarInset + space.sm}
+            />
+          </BookBoundary>
         ) : null
       ) : mode === 'timeline' ? (
         timeline
