@@ -21,7 +21,7 @@ const rose = {
 
 export type Colors = { [K in keyof typeof rose]: string };
 
-export type ThemeName = 'rose' | 'steampunk' | 'meadow' | 'serengeti' | 'diani' | 'starry';
+export type ThemeName = 'rose' | 'steampunk' | 'meadow' | 'serengeti' | 'diani' | 'starry' | 'golden';
 
 const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
   rose: {
@@ -224,6 +224,42 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
       onDanger: '#0B0B22',
     },
   },
+  golden: {
+    light: {
+      page: '#FFF5E8',
+      surface: '#FFFBF4',
+      surface2: '#FBE4C2',
+      ink: '#2E1A0E',
+      muted: '#87603D',
+      line: '#F1D8B5',
+      accent: '#B4530F',
+      accentSoft: '#FCE1C2',
+      onAccent: '#FFFFFF',
+      accent2: '#E8A33A',
+      onAccent2: '#2E1A0E',
+      accent3: '#4E6B32',
+      onAccent3: '#FFFFFF',
+      danger: '#A4281B',
+      onDanger: '#FFFFFF',
+    },
+    dark: {
+      page: '#160D07',
+      surface: '#22150C',
+      surface2: '#301E11',
+      ink: '#FCEAD2',
+      muted: '#D2A57A',
+      line: '#432C19',
+      accent: '#FFA54A',
+      accentSoft: '#4A2B12',
+      onAccent: '#160D07',
+      accent2: '#FFD27A',
+      onAccent2: '#160D07',
+      accent3: '#A3C77E',
+      onAccent3: '#160D07',
+      danger: '#FF8A70',
+      onDanger: '#160D07',
+    },
+  },
 };
 
 /** The themes you can pick in Settings. Each has a light and a dark look that follows the phone. */
@@ -234,6 +270,7 @@ export const THEMES: { name: ThemeName; label: string; emoji: string; blurb: str
   { name: 'serengeti', label: 'Serengeti', emoji: '🦒', blurb: 'Golden plains at sunset' },
   { name: 'diani', label: 'Diani Beach', emoji: '🏝️', blurb: 'Turquoise water and white sand' },
   { name: 'starry', label: 'Starry Night', emoji: '🌙', blurb: 'Deep blue skies and twinkling stars' },
+  { name: 'golden', label: 'Golden Hour', emoji: '🧡', blurb: 'Warm sunlight, night sky and a ribbon of hearts' },
 ];
 
 export function isThemeName(value: unknown): value is ThemeName {

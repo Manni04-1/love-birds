@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { StyleSheet, useColorScheme, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { HEART_PATH } from '@/components/hero';
+import { HEART_PATH, leafPath, ribbonHeart } from '@/components/hero';
 import { useColors, useThemeName, type Colors, type ThemeName } from '@/lib/theme';
 
 /*
@@ -291,6 +291,35 @@ function StarryMotif({ w, h, dark, c, id }: Motif) {
   );
 }
 
+/* Golden Hour: sunbeams, a ribbon of hearts, sparkles and leaves --------- */
+
+function GoldenMotif({ w, h, dark, c, id }: Motif) {
+  const rand = seeded(1124);
+  const sparkles = Array.from({ length: 9 }, () => ({ x: rand() * w, y: rand() * h * 0.9, size: 3 + rand() * 4 }));
+  const leaves = (x: number, y: number, flip: number) =>
+    [[0, 64, -40], [6, 54, -70], [10, 58, -15], [16, 44, 15], [4, 48, -95]].map(([d, len, ang], i) => (
+      <Path key={`${x}-${i}`} d={leafPath(x + d * flip, y - d, len, flip > 0 ? ang : 180 - ang)} fill={i % 2 ? c.accent3 : mixLeaf(dark)} opacity={dark ? 0.22 : 0.16} />
+    ));
+  return (
+    <>
+      <Wash id={id} w={w} h={h} color={c.accent2} strength={dark ? 0.14 : 0.22} reach={0.55} />
+      <Glow id={`${id}g`} cx={w * 0.9} cy={h * 0.06} r={w * 0.75} color={c.accent2} strength={dark ? 0.12 : 0.24} />
+      <Path d={`M${w * 0.55} 0 L${w * 0.7} 0 L${w} ${h * 0.3} L${w} ${h * 0.42} Z`} fill={dark ? c.accent2 : '#FFFFFF'} opacity={dark ? 0.05 : 0.35} />
+      <Path d={ribbonHeart(w * 0.82, h * 0.2, 2.2)} stroke={c.accent} strokeWidth={2} fill="none" opacity={dark ? 0.22 : 0.16} strokeLinecap="round" />
+      <Path d={ribbonHeart(w * 0.12, h * 0.62, 1.4, 0.4)} stroke={c.accent2} strokeWidth={2} fill="none" opacity={dark ? 0.24 : 0.3} strokeLinecap="round" />
+      {sparkles.map((s, i) => (
+        <Sparkle key={i} {...s} color={c.accent2} opacity={dark ? 0.4 : 0.45} />
+      ))}
+      {leaves(0, h, 1)}
+      {leaves(w, h * 0.55, -1)}
+    </>
+  );
+}
+
+function mixLeaf(dark: boolean) {
+  return dark ? '#5E7F3C' : '#2F4A22';
+}
+
 const MOTIFS: Record<ThemeName, (m: Motif) => ReactNode> = {
   rose: RoseMotif,
   steampunk: SteampunkMotif,
@@ -298,6 +327,7 @@ const MOTIFS: Record<ThemeName, (m: Motif) => ReactNode> = {
   serengeti: SerengetiMotif,
   diani: DianiMotif,
   starry: StarryMotif,
+  golden: GoldenMotif,
 };
 
 /**

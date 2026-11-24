@@ -86,6 +86,17 @@ const LOOKS: Record<ThemeName, Look> = {
     groundTop: '#3A3878',
     sky: { light: ['#1C1B45', '#2D2B66'], dark: ['#0E0D2A', '#1A1840'] },
   },
+  golden: {
+    flower: 'daisy',
+    petal: '#FF8A3D',
+    petal2: '#FFFFFF',
+    center: '#FFD24A',
+    stem: '#4E6B32',
+    leaf: '#5B7A35',
+    ground: '#9A4E1F',
+    groundTop: '#C46A2C',
+    sky: { light: ['#FFD9A0', '#FFF2DC'], dark: ['#2A160A', '#160D07'] },
+  },
 };
 
 const W = 300;
