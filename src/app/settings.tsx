@@ -9,6 +9,7 @@ import { BackupControls } from '@/components/backup';
 import { ChangePassword } from '@/components/change-password';
 import { ChimePicker } from '@/components/chime-picker';
 import { PinSetup, useAppLock, type PinTask } from '@/components/app-lock';
+import { ProblemReports } from '@/components/problem-reports';
 import { Hero, heroInk } from '@/components/hero';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { Avatar, Button, Chip, DateField, ErrorText, Field, Glyph, IconButton, Row, T } from '@/components/ui';
@@ -636,6 +637,10 @@ export default function Settings() {
             <Button title="Check for updates" variant="outline" onPress={checkForUpdate} loading={checking} />
           ) : null}
           {updateNote ? <T variant="small" muted>{updateNote}</T> : null}
+        </Group>
+
+        <Group label="Problem reports">
+          <ProblemReports coupleId={couple.id} userId={profile.id} myName={profile.name} partnerName={partner.name} />
         </Group>
 
         <Group label="Account">
