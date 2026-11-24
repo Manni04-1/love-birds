@@ -82,7 +82,8 @@ export function MemoryBook(props: Props) {
       toValue: to,
       duration: Math.max(180, TURN_MS * (1 - Math.min(Math.abs(velocity), 2) / 3)),
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      // Driven from JavaScript, the same way as while a finger drags the page.
+      useNativeDriver: false,
     }).start(() => {
       if (done) setIndex(s.at + (dir === 'next' ? 1 : -1));
       setTurning(null);
@@ -178,7 +179,8 @@ export function MemoryBook(props: Props) {
               accessibilityElementsHidden={!(turning === null && i === at)}
               style={[
                 { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: visible ? 1 : 0, zIndex: isOver ? 2 : visible ? 1 : 0 },
-                isOver ? { transformOrigin: 'left center', backfaceVisibility: 'hidden', transform: [{ perspective: 1400 }, { rotateY }] } : null,
+                // The page hinges on its left edge: shift that edge to the middle, turn, and shift back.
+                isOver && width > 0 ? { backfaceVisibility: 'hidden', transform: [{ perspective: 1400 }, { translateX: -width / 2 }, { rotateY }, { translateX: width / 2 }] } : null,
               ]}>
               <PageView page={page} {...props} memoryCount={memoryCount} onOpenBook={() => go('next')} onNewest={() => jump(pages.length - 2)} onStart={() => jump(1)} />
               {isOver ? <Animated.View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000', opacity: foldShade, borderRadius: 18 }} /> : null}
