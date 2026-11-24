@@ -370,6 +370,122 @@ function StarryScene({ dark, height, reduced }: SceneProps) {
   );
 }
 
+/* Golden Hour: a window of night sky, a glowing ribbon of hearts, sunlit stone and leaves */
+
+/** A heart traced as one line, with a small gap at the top like a ribbon. */
+export function ribbonHeart(cx: number, cy: number, scale: number, gap = 0.28) {
+  const pts: string[] = [];
+  const steps = 64;
+  for (let i = 0; i <= steps; i++) {
+    const t = gap + ((2 * Math.PI - 2 * gap) * i) / steps;
+    const x = 16 * Math.sin(t) ** 3;
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    pts.push(`${i ? 'L' : 'M'}${(cx + x * scale).toFixed(1)} ${(cy - y * scale).toFixed(1)}`);
+  }
+  return pts.join(' ');
+}
+
+export function leafPath(x: number, y: number, len: number, angle: number) {
+  const a = (angle * Math.PI) / 180;
+  const ex = x + len * Math.cos(a);
+  const ey = y + len * Math.sin(a);
+  const nx = -Math.sin(a) * len * 0.32;
+  const ny = Math.cos(a) * len * 0.32;
+  const mx = (x + ex) / 2;
+  const my = (y + ey) / 2;
+  return `M${x.toFixed(1)} ${y.toFixed(1)} Q${(mx + nx).toFixed(1)} ${(my + ny).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)} Q${(mx - nx).toFixed(1)} ${(my - ny).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)} Z`;
+}
+
+/** A spray of leaves from one point, swaying a little. */
+function LeafSpray({ x, y, flip, dark, reduced, delay }: { x: string; y: number; flip?: boolean; dark: boolean; reduced: boolean; delay: number }) {
+  const t = usePulse(5200, delay, reduced);
+  const rotate = t.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] });
+  const leaves: [number, number, number][] = [
+    [8, 70, -30], [12, 62, -55], [18, 58, -10], [6, 52, -80], [26, 48, 12], [30, 40, -38], [14, 44, 32],
+  ];
+  const deep = dark ? '#1E2E14' : '#2F4A22';
+  const light = dark ? '#33491F' : '#5B7A35';
+  return (
+    <Animated.View style={[abs(x, y), { width: 90, height: 90, transform: [{ scaleX: flip ? -1 : 1 }, { rotate }] }]}>
+      <Svg width={90} height={90} viewBox="0 0 90 90">
+        {leaves.map(([dx, len, ang], i) => (
+          <Path key={i} d={leafPath(4 + dx * 0.3, 86 - dx, len * 0.75, ang - 45)} fill={i % 2 ? light : deep} opacity={0.95} />
+        ))}
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/** The glowing ribbon: a soft wide glow under a bright gold line, breathing slowly. */
+function HeartRibbon({ height, reduced }: { height: number; reduced: boolean }) {
+  const t = usePulse(4200, 0, reduced);
+  const opacity = t.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] });
+  const h = height;
+  const big = ribbonHeart(W * 0.6, h * 0.3, 2.6);
+  const small = ribbonHeart(W * 0.42, h * 0.42, 1.6, 0.4);
+  const swoosh = `M${W * 0.3} ${h * 0.74} C${W * 0.26} ${h * 0.55} ${W * 0.33} ${h * 0.5} ${W * 0.38} ${h * 0.56}`;
+  return (
+    <Animated.View style={[abs(0, 0), { width: '100%', height: h, opacity }]}>
+      <Svg width="100%" height={h} viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="xMidYMid slice">
+        {[big, small, swoosh].map((d, i) => (
+          <G key={i}>
+            <Path d={d} stroke="#FFB547" strokeOpacity={0.22} strokeWidth={14} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d={d} stroke="#FFD48A" strokeOpacity={0.5} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d={d} stroke="#FFF3D6" strokeWidth={2.4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </G>
+        ))}
+      </Svg>
+    </Animated.View>
+  );
+}
+
+function GoldenScene({ dark, height, reduced }: SceneProps) {
+  const h = height;
+  const wl = W * 0.22;
+  const wr = W * 0.8;
+  const sill = h * 0.8;
+  const wall = dark ? '#5A2C12' : '#E0863A';
+  const wallLine = dark ? '#3A1C0A' : '#B9652A';
+  const step = dark ? '#6B3818' : '#EE9A4C';
+  const stepTop = dark ? '#8A4D22' : '#FFC27A';
+  const stars: [string, number, number, number][] = [
+    ['28%', 0.12, 3, 0], ['36%', 0.3, 2, 700], ['47%', 0.08, 3, 1400], ['70%', 0.12, 2, 300], ['74%', 0.5, 3, 1100],
+    ['32%', 0.6, 2, 1800], ['55%', 0.62, 2, 500], ['66%', 0.7, 3, 2200], ['40%', 0.18, 2, 900],
+  ];
+  return (
+    <>
+      <Backdrop id="golden" stops={dark ? ['#3A1D0C', '#1A0F08'] : ['#FFC170', '#D9702A']} height={h}>
+        {/* Stone walls either side, with a few joints. */}
+        <Rect x={0} y={0} width={wl} height={sill} fill={wall} />
+        <Rect x={wr} y={0} width={W - wr} height={sill} fill={wall} />
+        {[0.16, 0.34, 0.52, 0.7].map((y, i) => (
+          <G key={i} opacity={0.35}>
+            <Path d={`M0 ${h * y} H${wl} M${wr} ${h * y} H${W}`} stroke={wallLine} strokeWidth={1.2} />
+            <Path d={`M${i % 2 ? wl * 0.5 : wl * 0.25} ${h * y} v${h * 0.18} M${wr + (i % 2 ? 22 : 44)} ${h * y} v${h * 0.18}`} stroke={wallLine} strokeWidth={1.2} />
+          </G>
+        ))}
+        {/* The window of night sky. */}
+        <Rect x={wl} y={0} width={wr - wl} height={sill} fill={dark ? '#0E0805' : '#1E120A'} />
+        <Rect x={wl} y={0} width={4} height={sill} fill="#000" opacity={0.25} />
+        {/* Steps. */}
+        <Rect x={0} y={sill} width={W} height={h - sill} fill={step} />
+        <Rect x={0} y={sill} width={W} height={3} fill={stepTop} />
+        <Rect x={0} y={sill + (h - sill) * 0.55} width={W} height={2} fill={stepTop} opacity={0.6} />
+        {/* Sunbeams slanting across. */}
+        <Path d={`M0 ${h * 0.05} L${W * 0.12} 0 L${W * 0.5} ${h} L${W * 0.34} ${h} Z`} fill="#FFF4D6" opacity={dark ? 0.06 : 0.16} />
+        <Path d={`M${W * 0.62} 0 L${W * 0.7} 0 L${W} ${h * 0.62} L${W} ${h * 0.82} Z`} fill="#FFF4D6" opacity={dark ? 0.05 : 0.12} />
+      </Backdrop>
+      {stars.map(([x, y, s, d], i) => (
+        <Twinkle key={i} x={x} y={h * y} size={s} color="#FFE6A8" delay={d} duration={2600 + (i % 3) * 500} reduced={reduced} />
+      ))}
+      <HeartRibbon height={h} reduced={reduced} />
+      <LeafSpray x="-5%" y={h - 82} dark={dark} reduced={reduced} delay={0} />
+      <LeafSpray x="84%" y={h - 86} flip dark={dark} reduced={reduced} delay={1600} />
+      <LeafSpray x="86%" y={-26} flip dark={dark} reduced={reduced} delay={800} />
+    </>
+  );
+}
+
 /* Shared ------------------------------------------------------------------ */
 
 type SceneProps = { dark: boolean; height: number; reduced: boolean };
@@ -399,6 +515,7 @@ const SCENES: Record<ThemeName, (p: SceneProps) => ReactNode> = {
   serengeti: SerengetiScene,
   diani: DianiScene,
   starry: StarryScene,
+  golden: GoldenScene,
 };
 
 /** Text colour that reads well on each scene. */

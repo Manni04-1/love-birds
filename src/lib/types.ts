@@ -10,7 +10,7 @@ export type Profile = {
   bubble?: BubbleStyle | null;
   /** Extra question decks switched on: 0 off, 1 flirty, 2 flirty and erotic. */
   heat?: number | null;
-  /** App theme: rose, steampunk, meadow, serengeti, diani or starry. */
+  /** App theme: rose, steampunk, meadow, serengeti, diani, starry or golden. */
   theme?: string | null;
   /** YYYY-MM-DD */
   birthday?: string | null;

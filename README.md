@@ -87,7 +87,7 @@ Android only lets a new file update an installed app if both are signed with the
 | Rose, thorn and bud | An evening check-in: the best bit of your day, the hard bit, and something you're looking forward to. Hidden until you've both shared |
 | Photo of the day | One photo from your day each, from the camera or the gallery. Your partner's stays hidden until you've added yours. You can swap yours the same day. Double tap your partner's photo (or tap the heart) to like it, which sends them a notification; tap a photo to see it full screen |
 | Sweet gesture | A small idea each day for something kind to do. You each get a different one, so it stays a surprise |
-| Themes | Rose, Steampunk, Meadow, Serengeti, Diani Beach and Starry Night, each with a light and a dark look. You each pick your own |
+| Themes | Rose, Steampunk, Meadow, Serengeti, Diani Beach, Starry Night and Golden Hour, each with a light and a dark look. You each pick your own |
 | Calendar | Month view, add plans with date, time and a note, long press to delete. Updates live when your partner adds something |
 | Chat | Text, photos and voice notes (tap the mic, up to 5 minutes), double tap a message to heart it, hold it to react (the reaction you pick floats up both screens), "Seen" receipts, live updates. Each of you picks a bubble: fuchsia with hearts, or thorny vines and roses |
 | Home-screen widgets (Android) | Love Birds (4 × 2): your animals, days together, how your partner feels and your next plan. Countdown (2 × 2): days to go until your next plan. Thinking of you (2 × 1): one tap sends the heartbeat. Add them from Settings or from your home screen's widget list. With private notifications on, they leave out plan names and mood words |
