@@ -311,8 +311,53 @@ function GoldenMotif({ w, h, dark, c, id }: Motif) {
         <Sparkle key={i} {...s} color={c.accent2} opacity={dark ? 0.4 : 0.45} />
       ))}
       {leaves(0, h, 1)}
-      {leaves(w, h * 0.55, -1)}
+      {/* Bamboo up the right edge, for the panda. */}
+      {[0, 12].map((dx, k) => (
+        <G key={`b${k}`} opacity={dark ? 0.2 : 0.16}>
+          <Path d={`M${w - 14 - dx} ${h} L${w - 12 - dx} ${h * (0.5 + k * 0.08)}`} stroke={c.accent3} strokeWidth={5} strokeLinecap="round" />
+          {Array.from({ length: 6 }, (_, i) => h - 40 - i * 52)
+            .filter((y) => y > h * (0.5 + k * 0.08) + 10)
+            .map((y, i) => (
+              <G key={i}>
+                <Path d={`M${w - 18 - dx} ${y} h8`} stroke={c.accent3} strokeWidth={2} />
+                <Path d={leafPath(w - 13 - dx, y, 22, 200 + (i % 2) * 30)} fill={c.accent3} />
+              </G>
+            ))}
+        </G>
+      ))}
+      {/* A kangaroo's tracks and a panda's paw prints, wandering along together. */}
+      {Array.from({ length: 6 }, (_, i) => {
+        const x = w * 0.18 + i * w * 0.12;
+        const y = h * 0.93 - i * h * 0.045;
+        return (
+          <G key={`p${i}`} opacity={dark ? 0.22 : 0.18}>
+            <Roo x={x} y={y - 16} color={c.accent} />
+            <Paw x={x + 10} y={y + 8} color={c.ink} />
+          </G>
+        );
+      })}
     </>
+  );
+}
+
+/** A kangaroo's footprint pair: two long feet side by side. */
+function Roo({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <G transform={`rotate(-18 ${x} ${y})`}>
+      <Path d={`M${x - 4} ${y} q -2 -8 0 -14 q 2 6 0 14 Z M${x + 4} ${y} q -2 -8 0 -14 q 2 6 0 14 Z`} fill={color} />
+    </G>
+  );
+}
+
+/** A panda's paw: a round pad and five toes. */
+function Paw({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <G>
+      <Circle cx={x} cy={y} r={4} fill={color} />
+      {[-150, -115, -90, -65, -30].map((a, i) => (
+        <Circle key={i} cx={x + 6 * Math.cos((a * Math.PI) / 180)} cy={y + 6 * Math.sin((a * Math.PI) / 180)} r={1.5} fill={color} />
+      ))}
+    </G>
   );
 }
 

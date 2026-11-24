@@ -270,7 +270,7 @@ export const THEMES: { name: ThemeName; label: string; emoji: string; blurb: str
   { name: 'serengeti', label: 'Serengeti', emoji: '🦒', blurb: 'Golden plains at sunset' },
   { name: 'diani', label: 'Diani Beach', emoji: '🏝️', blurb: 'Turquoise water and white sand' },
   { name: 'starry', label: 'Starry Night', emoji: '🌙', blurb: 'Deep blue skies and twinkling stars' },
-  { name: 'golden', label: 'Golden Hour', emoji: '🧡', blurb: 'Warm sunlight, night sky and a ribbon of hearts' },
+  { name: 'golden', label: 'Roo & Panda', emoji: '🦘', blurb: 'A kangaroo and a panda in golden light, under a ribbon of hearts' },
 ];
 
 export function isThemeName(value: unknown): value is ThemeName {
