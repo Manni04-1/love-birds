@@ -416,6 +416,112 @@ function LeafSpray({ x, y, flip, dark, reduced, delay }: { x: string; y: number;
   );
 }
 
+/** A kangaroo sitting up, facing right, with round glasses and a tail that curls into a heart. */
+export function KangarooArt({ size, dark }: { size: number; dark?: boolean }) {
+  const fur = '#D9822B';
+  const furDark = '#B4621C';
+  const belly = '#F3C58E';
+  const ink = '#2B1B12';
+  return (
+    <Svg width={size} height={size * 1.3} viewBox="0 0 100 130">
+      {/* Tail, curling round into a heart. */}
+      <Path d="M34 118 C 14 124, 2 112, 6 98 C 8 88, 18 86, 22 94 C 26 84, 38 86, 36 98 C 34 108, 24 112, 18 118" stroke={furDark} strokeWidth={7} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Ellipse cx={46} cy={96} rx={24} ry={30} fill={fur} />
+      {/* Neck. */}
+      <Path d="M44 70 Q 46 58 52 56 L 64 60 Q 60 70 62 80 Z" fill={fur} />
+      <Ellipse cx={55} cy={101} rx={13} ry={20} fill={belly} />
+      <Ellipse cx={58} cy={126} rx={20} ry={4.5} fill={furDark} />
+      {/* Arm resting on the knee. */}
+      <Path d="M54 80 Q 62 92 70 100" stroke={furDark} strokeWidth={6} fill="none" strokeLinecap="round" />
+      {/* Ears. */}
+      <Ellipse cx={50} cy={30} rx={5.5} ry={15} fill={fur} transform="rotate(-18 50 30)" />
+      <Ellipse cx={50} cy={31} rx={2.6} ry={10} fill="#F2A7A0" transform="rotate(-18 50 31)" />
+      <Ellipse cx={62} cy={28} rx={5.5} ry={15} fill={fur} transform="rotate(10 62 28)" />
+      <Ellipse cx={62} cy={29} rx={2.6} ry={10} fill="#F2A7A0" transform="rotate(10 62 29)" />
+      {/* Head and snout. */}
+      <Ellipse cx={58} cy={52} rx={15} ry={13} fill={fur} />
+      <Ellipse cx={71} cy={58} rx={10} ry={7.5} fill={belly} />
+      <Circle cx={79} cy={55} r={2.6} fill={ink} />
+      <Path d="M70 62 q 4 3 8 0" stroke={ink} strokeWidth={1.4} fill="none" strokeLinecap="round" />
+      <Circle cx={66} cy={60} r={3} fill="#F07A6A" opacity={0.45} />
+      {/* Glasses, and a happy closed eye. */}
+      <Circle cx={64} cy={49} r={5.5} stroke={ink} strokeWidth={1.8} fill="#FFE7B0" fillOpacity={0.35} />
+      <Path d="M69.5 49 L 74 48" stroke={ink} strokeWidth={1.6} />
+      <Path d="M58.5 48 L 50 46" stroke={ink} strokeWidth={1.4} />
+      <Path d="M61.5 49.5 q 2.5 2 5 0" stroke={ink} strokeWidth={1.5} fill="none" strokeLinecap="round" />
+      {dark ? <Ellipse cx={46} cy={96} rx={24} ry={30} fill="#000" opacity={0.08} /> : null}
+    </Svg>
+  );
+}
+
+/** A panda sitting up, facing left, with long braids and a little bunch of flowers. */
+export function PandaArt({ size, dark }: { size: number; dark?: boolean }) {
+  const white = '#F8F4EE';
+  const black = '#211C1A';
+  const braid = '#4A2A1A';
+  return (
+    <Svg width={size} height={size * 1.3} viewBox="0 0 100 130">
+      {/* Braids behind. */}
+      {[0, 1, 2].map((i) => (
+        <Path key={`l${i}`} d={`M${30 + i * 3} 46 C ${22 + i * 3} 62, ${30 + i * 3} 76, ${22 + i * 4} ${96 + i * 3}`} stroke={braid} strokeWidth={3} fill="none" strokeLinecap="round" strokeDasharray="3 1.5" />
+      ))}
+      {[0, 1, 2].map((i) => (
+        <Path key={`r${i}`} d={`M${58 + i * 3} 44 C ${70 + i * 3} 60, ${64 + i * 3} 78, ${74 + i * 3} ${100 + i * 2}`} stroke={braid} strokeWidth={3} fill="none" strokeLinecap="round" strokeDasharray="3 1.5" />
+      ))}
+      <Ellipse cx={54} cy={98} rx={27} ry={29} fill={white} />
+      <Ellipse cx={42} cy={123} rx={15} ry={6.5} fill={black} />
+      <Ellipse cx={68} cy={123} rx={13} ry={6} fill={black} />
+      {/* Arms holding the flowers. */}
+      <Path d="M74 82 Q 62 98 48 100" stroke={black} strokeWidth={9} fill="none" strokeLinecap="round" />
+      <Path d="M44 92 L 38 76 M44 92 L 44 74 M44 92 L 50 77" stroke="#5B7A35" strokeWidth={1.6} />
+      <Circle cx={38} cy={75} r={3.6} fill="#FF8A3D" />
+      <Circle cx={44} cy={72} r={3.6} fill="#FFFFFF" />
+      <Circle cx={50} cy={76} r={3.6} fill="#FF6B3D" />
+      <Circle cx={38} cy={75} r={1.2} fill="#FFD24A" />
+      <Circle cx={44} cy={72} r={1.2} fill="#FFD24A" />
+      <Circle cx={50} cy={76} r={1.2} fill="#FFD24A" />
+      {/* Ears, head, eye patches and closed, smiling eyes. */}
+      <Circle cx={31} cy={37} r={7.5} fill={black} />
+      <Circle cx={61} cy={35} r={7.5} fill={black} />
+      <Circle cx={46} cy={54} r={20} fill={white} />
+      <Ellipse cx={38} cy={54} rx={5.5} ry={7.5} fill={black} transform="rotate(22 38 54)" />
+      <Ellipse cx={54} cy={54} rx={5.5} ry={7.5} fill={black} transform="rotate(-22 54 54)" />
+      <Path d="M35.5 54 q 2.5 2 5 0 M51.5 54 q 2.5 2 5 0" stroke={white} strokeWidth={1.5} fill="none" strokeLinecap="round" />
+      <Ellipse cx={46} cy={63} rx={3.2} ry={2.2} fill={black} />
+      <Path d="M42.5 66.5 q 3.5 3 7 0" stroke="#C8423A" strokeWidth={1.6} fill="none" strokeLinecap="round" />
+      <Circle cx={33} cy={62} r={3} fill="#F07A6A" opacity={0.45} />
+      <Circle cx={59} cy={62} r={3} fill="#F07A6A" opacity={0.45} />
+      {/* Sunglasses pushed up on the head. */}
+      <Path d="M33 37 q 6 -4 12 -1 M47 36 q 6 -4 12 0" stroke={black} strokeWidth={2.4} fill="none" strokeLinecap="round" />
+      {dark ? <Ellipse cx={54} cy={98} rx={27} ry={29} fill="#000" opacity={0.12} /> : null}
+    </Svg>
+  );
+}
+
+/** One of the pair, breathing gently and leaning in towards the other. */
+function Sitter({ left, bottom, size, lean, delay, reduced, children }: { left: string; bottom: number; size: number; lean: number; delay: number; reduced: boolean; children: ReactNode }) {
+  const t = usePulse(4600, delay, reduced);
+  const rotate = t.interpolate({ inputRange: [0, 1], outputRange: [`${lean}deg`, `${lean * 1.8}deg`] });
+  const scaleY = t.interpolate({ inputRange: [0, 1], outputRange: [1, 1.025] });
+  return <Animated.View style={[abs(left, bottom - size * 1.3), { transform: [{ rotate }, { scaleY }] }]}>{children}</Animated.View>;
+}
+
+/** Bamboo for the panda: two stalks with joints and a few leaves. */
+function bambooPaths(x: number, top: number, bottom: number) {
+  const stalks: string[] = [];
+  const joints: string[] = [];
+  const leaves: string[] = [];
+  [0, 14].forEach((dx, k) => {
+    const sx = x + dx;
+    stalks.push(`M${sx} ${bottom} L${sx + (k ? 3 : -2)} ${top + k * 18}`);
+    for (let y = bottom - 26; y > top + k * 18 + 8; y -= 28) {
+      joints.push(`M${sx - 4} ${y} L${sx + 4} ${y}`);
+      leaves.push(leafPath(sx, y, 20, k ? -30 : 205));
+    }
+  });
+  return { stalks, joints, leaves };
+}
+
 /** The glowing ribbon: a soft wide glow under a bright gold line, breathing slowly. */
 function HeartRibbon({ height, reduced }: { height: number; reduced: boolean }) {
   const t = usePulse(4200, 0, reduced);
@@ -439,7 +545,7 @@ function HeartRibbon({ height, reduced }: { height: number; reduced: boolean }) 
   );
 }
 
-function GoldenScene({ dark, height, reduced }: SceneProps) {
+function GoldenScene({ dark, height, reduced, roo = false }: SceneProps & { roo?: boolean }) {
   const h = height;
   const wl = W * 0.22;
   const wr = W * 0.8;
@@ -448,6 +554,7 @@ function GoldenScene({ dark, height, reduced }: SceneProps) {
   const wallLine = dark ? '#3A1C0A' : '#B9652A';
   const step = dark ? '#6B3818' : '#EE9A4C';
   const stepTop = dark ? '#8A4D22' : '#FFC27A';
+  const bamboo = bambooPaths(W * 0.87, h * 0.02, sill);
   const stars: [string, number, number, number][] = [
     ['28%', 0.12, 3, 0], ['36%', 0.3, 2, 700], ['47%', 0.08, 3, 1400], ['70%', 0.12, 2, 300], ['74%', 0.5, 3, 1100],
     ['32%', 0.6, 2, 1800], ['55%', 0.62, 2, 500], ['66%', 0.7, 3, 2200], ['40%', 0.18, 2, 900],
@@ -474,16 +581,44 @@ function GoldenScene({ dark, height, reduced }: SceneProps) {
         {/* Sunbeams slanting across. */}
         <Path d={`M0 ${h * 0.05} L${W * 0.12} 0 L${W * 0.5} ${h} L${W * 0.34} ${h} Z`} fill="#FFF4D6" opacity={dark ? 0.06 : 0.16} />
         <Path d={`M${W * 0.62} 0 L${W * 0.7} 0 L${W} ${h * 0.62} L${W} ${h * 0.82} Z`} fill="#FFF4D6" opacity={dark ? 0.05 : 0.12} />
+        {/* Bamboo up the right-hand wall, for the panda. */}
+        <G display={roo ? undefined : 'none'} opacity={dark ? 0.7 : 0.85}>
+          {bamboo.stalks.map((d, i) => (
+            <Path key={`s${i}`} d={d} stroke={dark ? '#4E6B32' : '#6E8F3A'} strokeWidth={6} strokeLinecap="round" />
+          ))}
+          {bamboo.joints.map((d, i) => (
+            <Path key={`j${i}`} d={d} stroke={dark ? '#2F4A22' : '#3F5E25'} strokeWidth={2} strokeLinecap="round" />
+          ))}
+          {bamboo.leaves.map((d, i) => (
+            <Path key={`l${i}`} d={d} fill={dark ? '#3F5E25' : '#5B7A35'} />
+          ))}
+        </G>
       </Backdrop>
       {stars.map(([x, y, s, d], i) => (
         <Twinkle key={i} x={x} y={h * y} size={s} color="#FFE6A8" delay={d} duration={2600 + (i % 3) * 500} reduced={reduced} />
       ))}
       <HeartRibbon height={h} reduced={reduced} />
-      <LeafSpray x="-5%" y={h - 82} dark={dark} reduced={reduced} delay={0} />
-      <LeafSpray x="84%" y={h - 86} flip dark={dark} reduced={reduced} delay={1600} />
-      <LeafSpray x="86%" y={-26} flip dark={dark} reduced={reduced} delay={800} />
+      {roo ? null : <LeafSpray x="-5%" y={h - 82} dark={dark} reduced={reduced} delay={0} />}
+      {roo ? null : <LeafSpray x="84%" y={h - 86} flip dark={dark} reduced={reduced} delay={1600} />}
+      {roo ? null : <LeafSpray x="86%" y={-26} flip dark={dark} reduced={reduced} delay={800} />}
+      {roo ? <LeafSpray x="-6%" y={-30} dark={dark} reduced={reduced} delay={800} /> : null}
+      {roo ? (
+        <>
+      <Sitter left="3%" bottom={h * 0.97} size={Math.min(92, h * 0.4)} lean={3} delay={0} reduced={reduced}>
+        <KangarooArt size={Math.min(92, h * 0.4)} dark={dark} />
+      </Sitter>
+      <Sitter left="74%" bottom={h * 0.97} size={Math.min(92, h * 0.4)} lean={-3} delay={1200} reduced={reduced}>
+        <PandaArt size={Math.min(92, h * 0.4)} dark={dark} />
+      </Sitter>
+        </>
+      ) : null}
     </>
   );
+}
+
+/** Roo & Panda: Golden Hour with a kangaroo and a panda sitting on the steps. */
+function RooScene(p: SceneProps) {
+  return <GoldenScene {...p} roo />;
 }
 
 /* Shared ------------------------------------------------------------------ */
@@ -516,6 +651,7 @@ const SCENES: Record<ThemeName, (p: SceneProps) => ReactNode> = {
   diani: DianiScene,
   starry: StarryScene,
   golden: GoldenScene,
+  roo: RooScene,
 };
 
 /** Text colour that reads well on each scene. */

@@ -21,9 +21,9 @@ const rose = {
 
 export type Colors = { [K in keyof typeof rose]: string };
 
-export type ThemeName = 'rose' | 'steampunk' | 'meadow' | 'serengeti' | 'diani' | 'starry' | 'golden';
+export type ThemeName = 'rose' | 'steampunk' | 'meadow' | 'serengeti' | 'diani' | 'starry' | 'golden' | 'roo';
 
-const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
+const BASE: Record<Exclude<ThemeName, 'roo'>, { light: Colors; dark: Colors }> = {
   rose: {
     light: rose,
     dark: {
@@ -262,6 +262,9 @@ const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = {
   },
 };
 
+// Roo & Panda shares Golden Hour's colours.
+const PALETTES: Record<ThemeName, { light: Colors; dark: Colors }> = { ...BASE, roo: BASE.golden };
+
 /** The themes you can pick in Settings. Each has a light and a dark look that follows the phone. */
 export const THEMES: { name: ThemeName; label: string; emoji: string; blurb: string }[] = [
   { name: 'rose', label: 'Rose', emoji: '🌹', blurb: 'Soft pinks and floating hearts' },
@@ -271,6 +274,7 @@ export const THEMES: { name: ThemeName; label: string; emoji: string; blurb: str
   { name: 'diani', label: 'Diani Beach', emoji: '🏝️', blurb: 'Turquoise water and white sand' },
   { name: 'starry', label: 'Starry Night', emoji: '🌙', blurb: 'Deep blue skies and twinkling stars' },
   { name: 'golden', label: 'Golden Hour', emoji: '🧡', blurb: 'Warm sunlight, night sky and a ribbon of hearts' },
+  { name: 'roo', label: 'Roo & Panda', emoji: '🦘', blurb: 'A kangaroo and a panda in golden light, under a ribbon of hearts' },
 ];
 
 export function isThemeName(value: unknown): value is ThemeName {

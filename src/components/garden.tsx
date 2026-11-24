@@ -19,7 +19,7 @@ type Look = {
   sky: { light: [string, string]; dark: [string, string] };
 };
 
-const LOOKS: Record<ThemeName, Look> = {
+const BASE: Record<Exclude<ThemeName, 'roo'>, Look> = {
   rose: {
     flower: 'rose',
     petal: '#E0436E',
@@ -98,6 +98,8 @@ const LOOKS: Record<ThemeName, Look> = {
     sky: { light: ['#FFD9A0', '#FFF2DC'], dark: ['#2A160A', '#160D07'] },
   },
 };
+
+const LOOKS: Record<ThemeName, Look> = { ...BASE, roo: BASE.golden };
 
 const W = 300;
 const H = 200;
