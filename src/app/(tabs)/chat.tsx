@@ -1,6 +1,6 @@
 import { requestRecordingPermissionsAsync } from 'expo-audio';
 import * as Clipboard from 'expo-clipboard';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { ActivityIndicator, Animated, FlatList, KeyboardAvoidingView, PanResponder, Pressable, TextInput, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,6 +45,12 @@ const snippet = (m: Message | undefined) => {
   if (sticker) return `${sticker.emoji} Sticker: ${sticker.text}`;
   return m.audio_path ? `🎤 Voice note${m.audio_ms ? ` · ${durationLabel(m.audio_ms)}` : ''}` : '📷 Photo';
 };
+
+/** Pinned messages, the newest pin first. */
+const sortPins = (list: Message[]) => [...list].sort((a, b) => (b.pinned_at ?? '').localeCompare(a.pinned_at ?? ''));
+
+/** A photo of the day you're answering in chat. */
+type PhotoQuote = { path: string; day: string };
 
 function sortMessages(list: Message[]) {
   return [...list].sort((a, b) => sentAt(b).localeCompare(sentAt(a)));
@@ -126,7 +132,7 @@ function whenLabel(iso: string) {
   return `${day === 'Today' ? 'today' : day === 'Tomorrow' ? 'tomorrow' : day} at ${clockLabel(iso)}`;
 }
 
-function MenuRow({ icon, label, danger, onPress }: { icon: 'reply' | 'copy' | 'edit' | 'trash'; label: string; danger?: boolean; onPress: () => void }) {
+function MenuRow({ icon, label, danger, onPress }: { icon: 'reply' | 'copy' | 'edit' | 'trash' | 'pin'; label: string; danger?: boolean; onPress: () => void }) {
   const c = useColors();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 12, opacity: pressed ? 0.6 : 1 })}>
@@ -152,6 +158,11 @@ export default function Chat() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [photoQuote, setPhotoQuote] = useState<PhotoQuote | null>(null);
+  const [pins, setPins] = useState<Message[]>([]);
+  // Which pin the banner shows. Tapping it shows that message, then moves on to the next pin.
+  const [pinAt, setPinAt] = useState(0);
+  const params = useLocalSearchParams<{ photo?: string; day?: string }>();
   const [editing, setEditing] = useState<Message | null>(null);
   const [menu, setMenu] = useState<Message | null>(null);
   const [scheduling, setScheduling] = useState(false);
@@ -185,14 +196,34 @@ export default function Chat() {
     await supabase.from('messages').update({ read_at: new Date().toISOString() }).eq('couple_id', coupleId).neq('sender_id', userId).is('read_at', null);
   }, [coupleId, userId]);
 
+  // Photo of the day's "Reply in chat" opens the chat with that photo quoted.
+  const askedPhoto = params.photo && params.day ? `${params.day}|${params.photo}` : null;
+  const [seenPhoto, setSeenPhoto] = useState<string | null>(null);
+  if (askedPhoto !== seenPhoto) {
+    setSeenPhoto(askedPhoto);
+    if (params.photo && params.day) {
+      setPhotoQuote({ path: params.photo, day: params.day });
+      setReplyTo(null);
+      setEditing(null);
+    }
+  }
+  useEffect(() => {
+    if (!askedPhoto) return;
+    // Clears the link so the photo isn't quoted again later, and opens the keyboard.
+    router.setParams({ photo: undefined, day: undefined });
+    setTimeout(() => input.current?.focus(), 300);
+  }, [askedPhoto]);
+
   const load = useCallback(async () => {
     if (!coupleId) return;
-    const [msgs, reacts, letters] = await Promise.all([
+    const [msgs, reacts, letters, pinned] = await Promise.all([
       supabase.from('messages').select('*').eq('couple_id', coupleId).order('created_at', { ascending: false }).limit(NEWEST),
       supabase.from('message_reactions').select('message_id, user_id, emoji, updated_at').eq('couple_id', coupleId).not('emoji', 'is', null),
       supabase.rpc('get_letters'),
+      supabase.from('messages').select('*').eq('couple_id', coupleId).not('pinned_at', 'is', null).order('pinned_at', { ascending: false }).limit(20),
     ]);
     if (msgs.error) return;
+    if (!pinned.error) setPins((pinned.data ?? []) as Message[]);
     const loaded = (msgs.data ?? []) as Message[];
     const fresh = new Set(loaded.map((m) => m.id));
     const cutoff = oldestWritten(loaded);
@@ -229,7 +260,13 @@ export default function Chat() {
   // Live updates: new messages, hearts, edits, read receipts, scheduled messages arriving, and reactions.
   useEffect(() => {
     if (!coupleId) return;
-    const upsert = (m: Message) => setMessages((prev) => sortMessages(prev.some((x) => x.id === m.id) ? prev.map((x) => (x.id === m.id ? m : x)) : [m, ...prev]));
+    const upsert = (m: Message) => {
+      setMessages((prev) => sortMessages(prev.some((x) => x.id === m.id) ? prev.map((x) => (x.id === m.id ? m : x)) : [m, ...prev]));
+      setPins((prev) => {
+        const rest = prev.filter((x) => x.id !== m.id);
+        return m.pinned_at && !m.unsent_at ? sortPins([m, ...rest]) : rest.length === prev.length ? prev : rest;
+      });
+    };
     const channel = supabase
       .channel(`messages:${coupleId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `couple_id=eq.${coupleId}` }, (payload) => {
@@ -244,7 +281,9 @@ export default function Chat() {
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (payload) => {
         const id = (payload.old as { id?: string }).id;
-        if (id) setMessages((prev) => prev.filter((x) => x.id !== id));
+        if (!id) return;
+        setMessages((prev) => prev.filter((x) => x.id !== id));
+        setPins((prev) => prev.filter((x) => x.id !== id));
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions', filter: `couple_id=eq.${coupleId}` }, (payload) => {
         const r = payload.new as Reaction;
@@ -274,15 +313,23 @@ export default function Chat() {
   if (!ctx) return null;
   const { partner, couple, profile } = ctx;
 
+  /** What a new message answers: a message, or a photo of the day. */
+  const answers = () => ({ reply_to: replyTo?.id ?? null, ...(photoQuote ? { quote_photo: photoQuote.path, quote_day: photoQuote.day } : {}) });
+
+  function clearAnswer() {
+    setReplyTo(null);
+    setPhotoQuote(null);
+  }
+
   async function send(body: string | null, imagePath: string | null, deliverAt?: Date) {
     setError('');
     const { data, error: err } = await supabase
       .from('messages')
-      .insert({ couple_id: couple.id, body, image_path: imagePath, reply_to: replyTo?.id ?? null, deliver_at: deliverAt?.toISOString() ?? null })
+      .insert({ couple_id: couple.id, body, image_path: imagePath, ...answers(), deliver_at: deliverAt?.toISOString() ?? null })
       .select()
       .single();
     if (err) throw err;
-    setReplyTo(null);
+    clearAnswer();
     setMessages((prev) => sortMessages(prev.some((x) => x.id === data.id) ? prev : [data as Message, ...prev]));
   }
 
@@ -313,9 +360,9 @@ export default function Chat() {
   async function sendSticker(sticker: string) {
     setStickers(false);
     setError('');
-    const { data, error: err } = await supabase.from('messages').insert({ couple_id: couple.id, sticker, reply_to: replyTo?.id ?? null }).select().single();
+    const { data, error: err } = await supabase.from('messages').insert({ couple_id: couple.id, sticker, ...answers() }).select().single();
     if (err) return setError(friendlyError(err));
-    setReplyTo(null);
+    clearAnswer();
     setMessages((prev) => sortMessages(prev.some((x) => x.id === data.id) ? prev : [data as Message, ...prev]));
   }
 
@@ -340,12 +387,12 @@ export default function Chat() {
       const path = await uploadVoiceNote(couple.id, uri);
       const { data, error: err } = await supabase
         .from('messages')
-        .insert({ couple_id: couple.id, audio_path: path, audio_ms: Math.round(ms), reply_to: replyTo?.id ?? null })
+        .insert({ couple_id: couple.id, audio_path: path, audio_ms: Math.round(ms), ...answers() })
         .select()
         .single();
       if (err) throw err;
       deleteRecording(uri);
-      setReplyTo(null);
+      clearAnswer();
       setRecording(false);
       setMessages((prev) => sortMessages(prev.some((x) => x.id === data.id) ? prev : [data as Message, ...prev]));
       return true;
@@ -421,12 +468,13 @@ export default function Chat() {
     const { error: err } = await supabase.rpc('unsend_message', { p_id: m.id });
     if (err) return setError(friendlyError(err));
     if (waiting(m)) setMessages((prev) => prev.filter((x) => x.id !== m.id));
-    else setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, unsent_at: new Date().toISOString(), body: null, image_path: null, audio_path: null, hearted: false } : x)));
+    else setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, unsent_at: new Date().toISOString(), body: null, image_path: null, audio_path: null, quote_photo: null, pinned_at: null, hearted: false } : x)));
+    setPins((prev) => prev.filter((x) => x.id !== m.id));
   }
 
   function startEdit(m: Message) {
     setMenu(null);
-    setReplyTo(null);
+    clearAnswer();
     setEditing(m);
     setText(m.body ?? '');
     setTimeout(() => input.current?.focus(), 150);
@@ -435,6 +483,7 @@ export default function Chat() {
   function startReply(m: Message) {
     setMenu(null);
     setEditing(null);
+    setPhotoQuote(null);
     setReplyTo(m);
     setTimeout(() => input.current?.focus(), 150);
   }
@@ -465,6 +514,43 @@ export default function Chat() {
     if (quoted.length) setFarQuotes((prev) => new Map([...prev, ...quoted.map((m) => [m.id, m] as const)]));
   }
 
+  async function pin(m: Message, on: boolean) {
+    setMenu(null);
+    const at = on ? new Date().toISOString() : null;
+    const next = { ...m, pinned_at: at, pinned_by: on ? (userId ?? null) : null };
+    setMessages((prev) => prev.map((x) => (x.id === m.id ? next : x)));
+    setPins((prev) => (on ? sortPins([next, ...prev.filter((x) => x.id !== m.id)]) : prev.filter((x) => x.id !== m.id)));
+    setPinAt(0);
+    const { error: err } = await supabase.rpc('pin_message', { p_id: m.id, p_pin: on });
+    if (err) {
+      setError(friendlyError(err));
+      load();
+    }
+  }
+
+  /** Tapping the pinned banner shows that message (loading earlier ones if it's further up), then moves to the next pin. */
+  async function openPin() {
+    const p = pins[pinAt % pins.length];
+    if (!p) return;
+    setPinAt((n) => (n + 1) % Math.max(pins.length, 1));
+    if (messages.some((x) => x.id === p.id)) return jumpTo(p.id, messages);
+    if (!coupleId || !messages.length) return;
+    // An older pin: load everything from it up to what's loaded, then show it.
+    const { data, error: err } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('couple_id', coupleId)
+      .gte('created_at', p.created_at)
+      .lt('created_at', oldestWritten(messages))
+      .order('created_at', { ascending: false })
+      .limit(2000);
+    if (err) return setError(friendlyError(err));
+    const have = new Set(messages.map((m) => m.id));
+    const merged = sortMessages([...messages, ...((data ?? []) as Message[]).filter((m) => !have.has(m.id))]);
+    setMessages(merged);
+    setTimeout(() => jumpTo(p.id, merged), 150);
+  }
+
   /** Tapping the quote on a reply shows what it answers: a photo opens, anything else is scrolled to and glows. */
   function openQuoted(q: Message) {
     if (q.image_path) {
@@ -472,11 +558,16 @@ export default function Chat() {
       setViewer(start >= 0 ? { photos, start } : { photos: [viewerPhoto(q)], start: 0 });
       return;
     }
-    const index = messages.findIndex((x) => x.id === q.id);
+    jumpTo(q.id, messages);
+  }
+
+  /** Scrolls to a message and makes it glow for a moment. */
+  function jumpTo(id: string, list: Message[]) {
+    const index = list.findIndex((x) => x.id === id);
     if (index < 0) return;
     jumpTries.current = 0;
     listRef.current?.scrollToIndex({ index, animated: !reduced, viewPosition: 0.5 });
-    setFlashId(q.id);
+    setFlashId(id);
     glow.stopAnimation();
     glow.setValue(0);
     Animated.sequence([
@@ -552,8 +643,40 @@ export default function Chat() {
           style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.lg, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: c.accentSoft }}>
           <T style={{ fontSize: 18 }}>💖🌹</T>
           <T variant="small" style={{ flex: 1 }}>
-            Pick your chat bubble: fuchsia with hearts, or vines and roses. Tap to choose.
+            Pick your chat bubble: hearts, roses, stars, waves and more. Tap to choose.
           </T>
+        </Pressable>
+      )}
+      {pins.length > 0 && (
+        <Pressable
+          onPress={openPin}
+          accessibilityRole="button"
+          accessibilityLabel={`Pinned: ${snippet(pins[pinAt % pins.length])}`}
+          accessibilityHint={pins.length > 1 ? 'Shows this message. Tap again for the next pin.' : 'Shows this message'}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.sm,
+            paddingHorizontal: space.lg,
+            paddingVertical: space.sm,
+            borderBottomWidth: 1,
+            borderBottomColor: c.line,
+            backgroundColor: c.surface,
+            opacity: pressed ? 0.75 : 1,
+          })}>
+          <View style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: c.accent }} />
+          <Glyph name="pin" color={c.accent} size={16} />
+          <View style={{ flex: 1 }}>
+            <T variant="fine" accent style={{ fontWeight: '700' }}>
+              {pins.length > 1 ? `Pinned · ${(pinAt % pins.length) + 1} of ${pins.length}` : 'Pinned'}
+            </T>
+            <T variant="small" numberOfLines={1}>
+              {snippet(pins[pinAt % pins.length])}
+            </T>
+          </View>
+          {pins[pinAt % pins.length]?.image_path ? (
+            <Photo path={pins[pinAt % pins.length].image_path!} label="The pinned photo" style={{ width: 34, height: 34, borderRadius: 6 }} />
+          ) : null}
         </Pressable>
       )}
       {/*
@@ -659,6 +782,40 @@ export default function Chat() {
                     {quotedPhoto ? <Photo path={quotedPhoto} label="The photo this replies to" style={{ width: 44, height: 44, borderRadius: 6 }} /> : null}
                   </Pressable>
                 )}
+                {m.quote_photo && (
+                  <Pressable
+                    onPress={() => setViewer({ photos: [{ path: m.quote_photo!, caption: null, note: m.quote_day ? `Photo of the day · ${dayLabel(m.quote_day)}` : 'Photo of the day' }], start: 0 })}
+                    onLongPress={() => setMenu(m)}
+                    delayLongPress={350}
+                    accessibilityRole="button"
+                    accessibilityLabel={`In reply to ${mine ? `${partner.name}'s` : 'your'} photo of the day`}
+                    accessibilityHint="Opens the photo"
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginHorizontal: 8,
+                      marginTop: 8,
+                      paddingLeft: 10,
+                      paddingRight: 6,
+                      paddingVertical: 6,
+                      borderLeftWidth: 3,
+                      borderLeftColor: onAccent && !look ? c.onAccent : c.accent,
+                      borderRadius: 8,
+                      backgroundColor: 'rgba(127,127,127,0.15)',
+                      opacity: pressed ? 0.7 : 1,
+                    })}>
+                    <View style={{ flexGrow: 1, flexShrink: 1 }}>
+                      <T variant="fine" color={fineColor} style={{ fontWeight: '700' }}>
+                        {mine ? `${partner.name}'s photo of the day` : 'Your photo of the day'}
+                      </T>
+                      <T variant="small" color={textColor} numberOfLines={1}>
+                        {m.quote_day ? `📷 ${dayLabel(m.quote_day)}` : '📷 Photo'}
+                      </T>
+                    </View>
+                    <Photo path={m.quote_photo} label="The photo of the day this replies to" style={{ width: 44, height: 44, borderRadius: 6 }} />
+                  </Pressable>
+                )}
                 {m.image_path && <Photo path={m.image_path} style={{ width: 220, height: 220, borderRadius: radius.md }} />}
                 {isSticker && (
                   <View style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
@@ -744,6 +901,7 @@ export default function Chat() {
                       <T variant="fine" style={{ marginHorizontal: 6, marginTop: 2 }}>
                         {pending ? `🕒 Sends ${whenLabel(m.deliver_at!)}` : clockLabel(sentAt(m))}
                         {m.edited_at && !unsent ? ' · edited' : ''}
+                        {m.pinned_at && !unsent ? ' · 📌' : ''}
                         {mine && !pending && m.id === lastMineId ? (m.read_at ? ' · Seen' : ' · Sent') : ''}
                       </T>
                     </View>
@@ -763,26 +921,30 @@ export default function Chat() {
             {error}
           </T>
         ) : null}
-        {(replyTo || editing) && (
+        {(replyTo || editing || photoQuote) && (
           <Row style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, backgroundColor: c.surface2, borderTopWidth: 1, borderTopColor: c.line }}>
             <Glyph name={editing ? 'edit' : 'reply'} color={c.accent} size={18} />
             <View style={{ flex: 1 }}>
               <T variant="fine" accent style={{ fontWeight: '700' }}>
-                {editing ? 'Changing your message' : `Replying to ${replyTo?.sender_id === userId ? 'yourself' : partner.name}`}
+                {editing
+                  ? 'Changing your message'
+                  : photoQuote
+                    ? `Replying to ${partner.name}'s photo of the day`
+                    : `Replying to ${replyTo?.sender_id === userId ? 'yourself' : partner.name}`}
               </T>
               <T variant="small" numberOfLines={1}>
-                {snippet(editing ?? replyTo ?? undefined)}
+                {!editing && photoQuote ? `📷 ${dayLabel(photoQuote.day)}` : snippet(editing ?? replyTo ?? undefined)}
               </T>
             </View>
-            {!editing && replyTo?.image_path ? (
-              <Photo path={replyTo.image_path} label="The photo you're replying to" style={{ width: 40, height: 40, borderRadius: 6 }} />
+            {!editing && (photoQuote?.path ?? replyTo?.image_path) ? (
+              <Photo path={(photoQuote?.path ?? replyTo?.image_path)!} label="The photo you're replying to" style={{ width: 40, height: 40, borderRadius: 6 }} />
             ) : null}
             <IconButton
               label="Cancel"
               onPress={() => {
                 if (editing) setText('');
                 setEditing(null);
-                setReplyTo(null);
+                clearAnswer();
               }}>
               <Glyph name="close" color={c.muted} size={18} />
             </IconButton>
@@ -858,6 +1020,7 @@ export default function Chat() {
             </Row>
             <View>
               <MenuRow icon="reply" label="Reply" onPress={() => startReply(menu)} />
+              {!waiting(menu) ? <MenuRow icon="pin" label={menu.pinned_at ? 'Unpin' : 'Pin to the top'} onPress={() => pin(menu, !menu.pinned_at)} /> : null}
               {menu.body ? (
                 <MenuRow
                   icon="copy"
