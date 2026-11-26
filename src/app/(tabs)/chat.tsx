@@ -1,15 +1,18 @@
 import { requestRecordingPermissionsAsync } from 'expo-audio';
 import * as Clipboard from 'expo-clipboard';
+import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { ActivityIndicator, Animated, FlatList, KeyboardAvoidingView, PanResponder, Pressable, TextInput, useColorScheme, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Animated, FlatList, KeyboardAvoidingView, PanResponder, Pressable, ScrollView, useColorScheme, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeBackdrop } from '@/components/backdrop';
 import { useReducedMotion } from '@/components/hero';
+import { Composer, type ComposerHandle } from '@/components/composer';
 import { bubbleInk, LoveBubble } from '@/components/love-bubble';
 import { PartnerCard } from '@/components/partner-card';
 import { Photo } from '@/components/photo';
+import { PhotoEditor } from '@/components/photo-editor';
 import { PhotoViewer, type ViewerPhoto } from '@/components/photo-viewer';
 import { StickerArt, StickerPicker } from '@/components/sticker';
 import { Avatar, Button, DateField, Glyph, IconButton, Row, Sheet, T } from '@/components/ui';
@@ -18,7 +21,7 @@ import { parseSticker } from '@/content/stickers';
 import { addDays, clockLabel, dayLabel, toISODate, today } from '@/lib/dates';
 import { whileAway } from '@/lib/lock';
 import { setChatOpen } from '@/lib/notifications';
-import { pickPhoto, uploadPhoto } from '@/lib/photos';
+import { MAX_PHOTOS, pickPhotos, uploadPhoto, type DraftPhoto } from '@/lib/photos';
 import { REACTIONS, useRoom } from '@/lib/room';
 import { useCouple } from '@/lib/session';
 import { friendlyError, supabase } from '@/lib/supabase';
@@ -153,7 +156,10 @@ export default function Chat() {
   const userId = ctx?.userId;
   const [messages, setMessages] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Map<string, Reaction[]>>(new Map());
-  const [text, setText] = useState('');
+  // Photos picked to send, which you can crop or rotate first, and the one open in the editor.
+  const [drafts, setDrafts] = useState<DraftPhoto[]>([]);
+  const [editingPhoto, setEditingPhoto] = useState<DraftPhoto | null>(null);
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -187,7 +193,7 @@ export default function Chat() {
   const reduced = useReducedMotion();
   const focused = useRef(false);
   const lastTap = useRef<{ id: string; at: number; timer: ReturnType<typeof setTimeout> | null }>({ id: '', at: 0, timer: null });
-  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  const composer = useRef<ComposerHandle>(null);
   const voice = useVoicePlayback();
   const { current: playingId, loading: loadingId, failed: failedId, pause: pauseVoice } = voice;
 
@@ -211,7 +217,7 @@ export default function Chat() {
     if (!askedPhoto) return;
     // Clears the link so the photo isn't quoted again later, and opens the keyboard.
     router.setParams({ photo: undefined, day: undefined });
-    setTimeout(() => input.current?.focus(), 300);
+    setTimeout(() => composer.current?.focus(), 300);
   }, [askedPhoto]);
 
   const load = useCallback(async () => {
@@ -334,10 +340,11 @@ export default function Chat() {
   }
 
   async function sendText(deliverAt?: Date) {
-    const body = text.trim();
+    const body = (composer.current?.getText() ?? '').trim();
+    if (drafts.length && !editing) return sendPhotos(body);
     if (!body || sending) return;
     setSending(true);
-    setText('');
+    composer.current?.setText('');
     room.stopTyping();
     try {
       if (editing) {
@@ -350,10 +357,50 @@ export default function Chat() {
         await send(body, null, deliverAt);
       }
     } catch (e) {
-      setText(body);
+      composer.current?.setText(body);
       setError(friendlyError(e));
     } finally {
       setSending(false);
+    }
+  }
+
+  /** Sends the picked photos one after another, with what you typed as the caption on the first. */
+  async function sendPhotos(caption: string) {
+    if (sending || !drafts.length) return;
+    const queue = [...drafts];
+    setSending(true);
+    setError('');
+    composer.current?.setText('');
+    room.stopTyping();
+    let sent = 0;
+    setPhotoProgress({ done: 0, total: queue.length });
+    try {
+      for (const photo of queue) {
+        const path = await uploadPhoto(couple.id, photo);
+        await send(sent === 0 && caption ? caption : null, path);
+        sent++;
+        setDrafts((prev) => prev.filter((d) => d.id !== photo.id));
+        setPhotoProgress({ done: sent, total: queue.length });
+      }
+    } catch (e) {
+      // What didn't go stays in the tray to try again, with the caption if the first photo didn't go either.
+      if (sent === 0 && caption) composer.current?.setText(caption);
+      setError(friendlyError(e));
+    } finally {
+      setSending(false);
+      setPhotoProgress(null);
+    }
+  }
+
+  async function addPhotos() {
+    setError('');
+    const room = MAX_PHOTOS - drafts.length;
+    if (room <= 0) return setError(`You can send up to ${MAX_PHOTOS} photos at once.`);
+    try {
+      const picked = await pickPhotos(room);
+      if (picked.length) setDrafts((prev) => [...prev, ...picked].slice(0, MAX_PHOTOS));
+    } catch (e) {
+      setError(friendlyError(e));
     }
   }
 
@@ -399,20 +446,6 @@ export default function Chat() {
     } catch (e) {
       setError(friendlyError(e));
       return false;
-    }
-  }
-
-  async function sendPhoto() {
-    const photo = await pickPhoto();
-    if (!photo) return;
-    setSending(true);
-    try {
-      const path = await uploadPhoto(couple.id, photo);
-      await send(null, path);
-    } catch (e) {
-      setError(friendlyError(e));
-    } finally {
-      setSending(false);
     }
   }
 
@@ -476,8 +509,8 @@ export default function Chat() {
     setMenu(null);
     clearAnswer();
     setEditing(m);
-    setText(m.body ?? '');
-    setTimeout(() => input.current?.focus(), 150);
+    composer.current?.setText(m.body ?? '');
+    setTimeout(() => composer.current?.focus(), 150);
   }
 
   function startReply(m: Message) {
@@ -485,7 +518,7 @@ export default function Chat() {
     setEditing(null);
     setPhotoQuote(null);
     setReplyTo(m);
-    setTimeout(() => input.current?.focus(), 150);
+    setTimeout(() => composer.current?.focus(), 150);
   }
 
   /** Loads the next batch of earlier messages, when you scroll to the top of the chat. */
@@ -942,7 +975,7 @@ export default function Chat() {
             <IconButton
               label="Cancel"
               onPress={() => {
-                if (editing) setText('');
+                if (editing) composer.current?.setText('');
                 setEditing(null);
                 clearAnswer();
               }}>
@@ -959,46 +992,56 @@ export default function Chat() {
             }}
           />
         ) : (
-          <Row gap={space.sm} style={{ paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: tabBarInset + space.sm, borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.surface }}>
-            {!editing && !text.trim() && (
-              <IconButton label="Send a sticker" onPress={() => setStickers(true)}>
-                <Glyph name="smile" color={c.ink} />
-              </IconButton>
+          <>
+            {drafts.length > 0 && !editing && (
+              <View style={{ borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.surface2, paddingVertical: space.sm, gap: 6 }}>
+                <T variant="fine" style={{ paddingHorizontal: space.lg }}>
+                  {photoProgress
+                    ? `Sending ${Math.min(photoProgress.done + 1, photoProgress.total)} of ${photoProgress.total}…`
+                    : `${drafts.length === 1 ? '1 photo' : `${drafts.length} photos`} ready. Tap one to crop or rotate it.`}
+                </T>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm }} keyboardShouldPersistTaps="handled">
+                  {drafts.map((d, i) => (
+                    <View key={d.id}>
+                      <Pressable
+                        onPress={() => !sending && d.mimeType !== 'image/gif' && setEditingPhoto(d)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Photo ${i + 1} of ${drafts.length}`}
+                        accessibilityHint={d.mimeType === 'image/gif' ? undefined : 'Crop or rotate it'}>
+                        <Image source={{ uri: d.uri }} style={{ width: 72, height: 72, borderRadius: radius.sm }} contentFit="cover" />
+                        {d.mimeType !== 'image/gif' && (
+                          <View style={{ position: 'absolute', left: 4, bottom: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }}>
+                            <Glyph name="crop" color="#FFFFFF" size={13} />
+                          </View>
+                        )}
+                      </Pressable>
+                      {!sending && (
+                        <Pressable
+                          onPress={() => setDrafts((prev) => prev.filter((x) => x.id !== d.id))}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove photo ${i + 1}`}
+                          hitSlop={8}
+                          style={{ position: 'absolute', right: -6, top: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: c.ink, borderWidth: 2, borderColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
+                          <Glyph name="close" color={c.page} size={13} />
+                        </Pressable>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
             )}
-            {!editing && (
-              <IconButton label="Send a photo" onPress={sendPhoto}>
-                <Glyph name="photo" color={c.ink} />
-              </IconButton>
-            )}
-            <TextInput
-              ref={input}
-              value={text}
-              onChangeText={(t) => {
-                setText(t);
-                if (t.trim()) room.typing();
-              }}
-              placeholder={editing ? 'Change your message' : 'Message'}
-              placeholderTextColor={c.muted}
-              accessibilityLabel="Message"
-              multiline
-              maxLength={4000}
-              style={{ flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1.5, borderColor: c.line, borderRadius: 22, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, backgroundColor: c.page, color: c.ink, fontSize: 16 }}
+            <Composer
+              ref={composer}
+              editing={!!editing}
+              hasPhotos={drafts.length > 0}
+              onSend={() => sendText()}
+              onLater={() => setScheduling(true)}
+              onSticker={() => setStickers(true)}
+              onPhoto={addPhotos}
+              onVoice={startVoice}
+              onTyping={room.typing}
             />
-            {!!text.trim() && !editing && (
-              <IconButton label="Send later" onPress={() => setScheduling(true)}>
-                <Glyph name="clock" color={c.ink} />
-              </IconButton>
-            )}
-            {!editing && !text.trim() ? (
-              <IconButton label="Record a voice note" accent onPress={startVoice}>
-                <Glyph name="mic" color={c.onAccent} />
-              </IconButton>
-            ) : (
-              <IconButton label={editing ? 'Save change' : 'Send'} accent onPress={() => sendText()}>
-                <Glyph name={editing ? 'check' : 'send'} color={c.onAccent} />
-              </IconButton>
-            )}
-          </Row>
+          </>
         )}
       </KeyboardAvoidingView>
 
@@ -1066,6 +1109,14 @@ export default function Chat() {
       <StickerPicker open={stickers} onClose={() => setStickers(false)} onPick={sendSticker} animal={profile.animal} />
       <PhotoViewer photos={viewer?.photos ?? []} start={viewer ? viewer.start : null} onClose={() => setViewer(null)} />
       <PartnerCard open={cardOpen} onClose={() => setCardOpen(false)} />
+      <PhotoEditor
+        photo={editingPhoto}
+        onClose={() => setEditingPhoto(null)}
+        onDone={(edited) => {
+          setDrafts((prev) => prev.map((d) => (d.id === edited.id ? edited : d)));
+          setEditingPhoto(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -10,6 +10,9 @@ import { supabase } from './supabase';
 
 export type PickedPhoto = { uri: string; mimeType: string };
 
+/** A photo picked for the chat but not sent yet: it can still be cropped or rotated. */
+export type DraftPhoto = PickedPhoto & { id: string; width: number; height: number };
+
 // Photos go up with their long side at most this many pixels: sharp enough to fill a phone
 // screen or print a 6×4, and about five times smaller than a camera's full size.
 const LONGEST = 2048;
@@ -18,10 +21,11 @@ const QUALITY = 0.75;
 const web = Platform.OS === 'web';
 
 /** A smaller JPEG copy of a picked photo, or the photo as it is if it can't be made smaller. */
-async function shrink(asset: ImagePicker.ImagePickerAsset): Promise<PickedPhoto> {
+async function shrink(asset: ImagePicker.ImagePickerAsset): Promise<PickedPhoto & { width: number; height: number }> {
   const mimeType = asset.mimeType ?? 'image/jpeg';
+  const asIs = { uri: asset.uri, mimeType, width: asset.width, height: asset.height };
   // A GIF would lose its animation.
-  if (mimeType === 'image/gif') return { uri: asset.uri, mimeType };
+  if (mimeType === 'image/gif') return asIs;
   let context: ImageManipulatorContext | undefined;
   let image: ImageRef | undefined;
   try {
@@ -29,12 +33,47 @@ async function shrink(asset: ImagePicker.ImagePickerAsset): Promise<PickedPhoto>
     context = ImageManipulator.manipulate(asset.uri, { maxWidth: LONGEST, maxHeight: LONGEST });
     image = await context.renderAsync();
     const saved = await image.saveAsync({ compress: QUALITY, format: SaveFormat.JPEG });
-    return { uri: saved.uri, mimeType: 'image/jpeg' };
+    return { uri: saved.uri, mimeType: 'image/jpeg', width: saved.width, height: saved.height };
   } catch {
-    return { uri: asset.uri, mimeType };
+    return asIs;
   } finally {
     image?.release();
     context?.release();
+  }
+}
+
+/** How many photos you can send at once. */
+export const MAX_PHOTOS = 10;
+
+let draftCount = 0;
+
+/**
+ * Opens the photo library to pick up to `limit` photos, in the order you tap them. Each comes back already
+ * made smaller, ready to crop or send. An empty list if the person cancels.
+ */
+export async function pickPhotos(limit = MAX_PHOTOS): Promise<DraftPhoto[]> {
+  const result = await whileAway(() =>
+    ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: limit > 1, selectionLimit: limit, orderedSelection: true }),
+  );
+  if (result.canceled) return [];
+  const picked = await Promise.all(result.assets.slice(0, limit).map(shrink));
+  return picked.map((p) => ({ ...p, id: `draft-${Date.now()}-${draftCount++}` }));
+}
+
+/** Rotates a photo a quarter turn clockwise, or crops it to a rectangle in its own pixels. */
+export async function editPhoto(photo: DraftPhoto, change: { rotate: 90 } | { crop: { originX: number; originY: number; width: number; height: number } }): Promise<DraftPhoto> {
+  const context = ImageManipulator.manipulate(photo.uri);
+  let image: ImageRef | undefined;
+  try {
+    if ('rotate' in change) context.rotate(change.rotate);
+    else context.crop(change.crop);
+    image = await context.renderAsync();
+    // Edits are saved at a high quality, so cropping and rotating a few times doesn't blur the photo.
+    const saved = await image.saveAsync({ compress: 0.92, format: SaveFormat.JPEG });
+    return { ...photo, uri: saved.uri, mimeType: 'image/jpeg', width: saved.width, height: saved.height };
+  } finally {
+    image?.release();
+    context.release();
   }
 }
 
